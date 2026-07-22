@@ -1,0 +1,31 @@
+services:
+  synapse:
+    image: matrixdotorg/synapse:latest
+    container_name: synapse
+    restart: unless-stopped
+    environment:
+      SYNAPSE_SERVER_NAME: localhost
+      SYNAPSE_REPORT_STATS: "no"
+    volumes:
+      - ./synapse-data:/data
+    ports:
+      - "8008:8008"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if [ ! -f /data/homeserver.yaml ]; then
+          echo "No homeserver.yaml found, generating..."
+          python /start.py generate
+        fi
+        exec python /start.py
+
+  element:
+    image: vectorim/element-web:latest
+    container_name: element
+    restart: unless-stopped
+    depends_on:
+      - synapse
+    volumes:
+      - ./element-config.json:/app/config.json:ro
+    ports:
+      - "8080:80"
