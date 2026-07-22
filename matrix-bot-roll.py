@@ -1,4 +1,5 @@
 import asyncio
+import html
 import os
 import random
 import re
@@ -235,8 +236,9 @@ def format_roll_results(results):
     return "\n".join(lines)
 
 
-def markdown_bold_to_html(text: str) -> str:
-    """Convert **bold** markers to <b>bold</b>, coloring crit/fumble totals green/red."""
+def markdown_to_html(text: str) -> str:
+    """Convert **bold** and `code` markers to HTML, coloring crit/fumble totals green/red."""
+    text = html.escape(text, quote=False)
     text = re.sub(
         r"\*\*(.+?)\*\* 🎯 CRIT!",
         r'<b><font color="green">\1 CRIT!</font></b>',
@@ -249,7 +251,8 @@ def markdown_bold_to_html(text: str) -> str:
     )
     text = re.sub(r"(\d+)🎯", r'<b><font color="green">\1</font></b>🎯', text)
     text = re.sub(r"(\d+)💥", r'<b><font color="red">\1</font></b>💥', text)
-    return re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text)
+    text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text)
+    return re.sub(r"`(.+?)`", r"<code>\1</code>", text)
 
 
 async def message_callback(client: AsyncClient, room: MatrixRoom, event: RoomMessageText):
@@ -263,10 +266,20 @@ async def message_callback(client: AsyncClient, room: MatrixRoom, event: RoomMes
 
     parts = body.split(maxsplit=1)
     if len(parts) < 2:
-        reply = (
-            "Usage: !roll d20, !roll 2d6+4, !roll 4d20 1d6, "
-            "!roll 2d20kh1, !roll 4d6kl3, !roll 2d20adv, !roll 2d20dis, "
-            "!roll 4(d10+2), !roll 4(d10+2)kh1, etc."
+        reply = "\n".join(
+            [
+                "**Usage: !roll <expression> [expression ...]**",
+                "",
+                "• `!roll d20` — roll one die",
+                "• `!roll 4d6` — roll multiple dice",
+                "• `!roll 2d6+4` — add +/- modifiers",
+                "• `!roll 4d6kh3`, `!roll 4d6kl3` — keep highest/lowest dice",
+                "• `!roll 2d20adv`, `!roll 2d20dis` — advantage/disadvantage "
+                "(add one die then keep X highest/lowest)",
+                "• `!roll 4(d10+2)`, `!roll 4(d10+2)kh1`, `!roll 2(d20+3)adv` "
+                "— per-die modifier and adv/dis/kh/kl",
+                "• `!roll 2d6kh1+4 3(d10-2)adv` — combine everything",
+            ]
         )
     else:
         expr = parts[1].strip()
@@ -277,7 +290,7 @@ async def message_callback(client: AsyncClient, room: MatrixRoom, event: RoomMes
         "msgtype": "m.text",
         "body": reply,
         "format": "org.matrix.custom.html",
-        "formatted_body": markdown_bold_to_html(reply).replace("\n", "<br/>"),
+        "formatted_body": markdown_to_html(reply).replace("\n", "<br/>"),
     }
 
     await client.room_send(
