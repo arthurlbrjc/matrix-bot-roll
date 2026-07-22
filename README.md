@@ -1,5 +1,8 @@
 # matrix-bot-roll
 
+![AI-Generated License Badge](vibe-coded-badge.svg)
+
+
 A single-file Matrix bot that listens for `!roll` commands and replies with dice roll results. Built on [matrix-nio](https://github.com/matrix-nio/matrix-nio) with E2E encryption support.
 
 ## Features
@@ -87,6 +90,11 @@ docker compose up
 
 State (encryption keys, sync tokens) persists to `MATRIX_STORE_PATH` between runs.
 
-## License
+## 🤖 AI Transparency
 
-MIT
+This project is made with ai.
+
+- **AI Model**: Anthropic Claude Sonnet 5
+- **License**: MIT
+
+We believe in transparency about AI usage in software development.
