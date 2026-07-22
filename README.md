@@ -12,6 +12,8 @@ A single-file Matrix bot that listens for `!roll` commands and replies with dice
 - `!roll 4d20 1d6+2` — roll multiple expressions in one message, with a grand total
 - `!roll 4d6kh3` / `!roll 4d6kl3` — keep only the highest/lowest 3 of the 4 dice rolled
 - `!roll 2d20adv` / `!roll 2d20dis` — advantage/disadvantage: roll one extra die, then keep the best/worst 2 of the 3
+- `!roll 4(d10+2)` — group modifier: apply `+2` to each of the 4 dice individually, instead of once to the total
+- `!roll 4(d10+2)kh1` / `!roll 2(d20+3)adv` — group modifiers also combine with `kh`/`kl`/`adv`/`dis`, keeping among the modified values
 - Auto-joins any room it's invited to
 - Sanity limits on dice count (1–100) and sides (2–1000) to prevent abuse
 - Replies as both plain text and formatted HTML
@@ -69,6 +71,8 @@ In a room the bot has joined:
 !roll 4d6kh3
 !roll 1d20adv
 !roll 1d20dis
+!roll 4(d10+2)
+!roll 4(d10+2)kh1
 ```
 
 ## Other tasks
