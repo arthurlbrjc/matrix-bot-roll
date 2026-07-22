@@ -94,7 +94,7 @@ def roll_dice_group(count: int, sides: int, modifier: int, keep_str: str = None)
         return str(n)
 
     sign = "+" if modifier > 0 else "-"
-    modified = [r + modifier for r in rolls]
+    modified = [max(0, r + modifier) for r in rolls]
     pairs = list(zip(rolls, modified))
     detail = f"[{', '.join(f'{mark(r)}{sign}{abs(modifier)}=**{m}**' for r, m in pairs)}]"
 
@@ -180,7 +180,7 @@ def roll_dice(expr: str):
     else:
         kept = rolls
 
-    total = sum(kept) + modifier
+    total = max(0, sum(kept) + modifier)
 
     def mark(n):
         if n == sides:
