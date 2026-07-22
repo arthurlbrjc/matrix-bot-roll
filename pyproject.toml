@@ -1,0 +1,26 @@
+[project]
+name = "matrix-bot-roll"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Arthur P-L B",email = "7021678+arthurlbrjc@users.noreply.github.com"}
+]
+license = {text = "MIT"}
+requires-python = ">=3.14,<4.0"
+dependencies = [
+    "matrix-nio[e2e] (>=0.25.2,<0.26.0)",
+    "python-dotenv (>=1.2.2,<2.0.0)"
+]
+
+[tool.poetry]
+package-mode = false
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+dev = [
+    "invoke (>=3.0.3,<4.0.0)",
+    "watchfiles (>=1.2.0,<2.0.0)"
+]
