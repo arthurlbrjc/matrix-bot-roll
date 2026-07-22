@@ -27,7 +27,6 @@ STORE_PATH = os.environ["MATRIX_STORE_PATH"]
 os.makedirs(STORE_PATH, exist_ok=True)
 
 # Matches things like: 1d20, 2d6+4, d8, 3d10-2, 2d20kh1, 4d6kl3, 2d20adv, 2d20dis
-# (tolerates stray whitespace)
 DICE_RE = re.compile(
     r"^(\d*)\s*d\s*(\d+)\s*(kh\d+|kl\d+|adv|dis)?\s*([+-]\s*\d+)?$", re.IGNORECASE
 )
@@ -38,7 +37,7 @@ def roll_multiple(input_str: str):
     Parse and roll multiple space-separated dice expressions, e.g. '4d20 1d6+2'.
 
     Returns a list of tuples: (expr, result_or_None)
-    where result_or_None is (total, detail_str) from roll_dice, or None if invalid.
+    where result_or_None is (total, detail_str, crit) from roll_dice, or None if invalid.
     """
     exprs = input_str.split()
     if not exprs:
@@ -48,7 +47,7 @@ def roll_multiple(input_str: str):
 
 
 def roll_dice(expr: str):
-    """Parse and roll a dice expression like '2d6+4' or '2d20kh1'. Returns (total, detail_str) or None."""
+    """Parse and roll a dice expression like '2d6+4' or '2d20kh1'. Returns (total, detail_str, crit) or None."""
     match = DICE_RE.match(expr.strip())
     if not match:
         return None
@@ -92,17 +91,32 @@ def roll_dice(expr: str):
 
     total = sum(kept) + modifier
 
-    detail = f"[{', '.join(map(str, rolls))}]"
+    def mark(n):
+        if n == sides:
+            return f"{n}🎯"
+        elif n == 1:
+            return f"{n}💥"
+        return str(n)
+
+    detail = f"[{', '.join(mark(r) for r in rolls)}]"
     if adv_dis:
-        detail += f" with {adv_dis} → [{', '.join(map(str, kept))}]"
+        detail += f" with {adv_dis} → [{', '.join(mark(r) for r in kept)}]"
     elif keep_mode:
         word = "highest" if keep_mode == "h" else "lowest"
-        detail += f" keep {word} {keep_n} → [{', '.join(map(str, kept))}]"
+        detail += f" keep {word} {keep_n} → [{', '.join(mark(r) for r in kept)}]"
     if modifier:
         sign = "+" if modifier > 0 else ""
         detail += f" {sign}{modifier}"
 
-    return total, detail
+    # A single kept die at its max/min face is a natural crit/fumble.
+    crit = None
+    if len(kept) == 1:
+        if kept[0] == sides:
+            crit = "crit"
+        elif kept[0] == 1:
+            crit = "fumble"
+
+    return total, detail, crit
 
 
 def format_roll_results(results):
@@ -119,8 +133,9 @@ def format_roll_results(results):
         if result is None:
             lines.append(f"`{expr}` → invalid expression")
             continue
-        total, detail = result
-        lines.append(f"🎲 {expr} → {detail} = **{total}**")
+        total, detail, crit = result
+        suffix = " 🎯 CRIT!" if crit == "crit" else " 💥 FUMBLE!" if crit == "fumble" else ""
+        lines.append(f"🎲 {expr} → {detail} = **{total}**{suffix}")
         grand_total += total
         valid_count += 1
 
@@ -131,7 +146,19 @@ def format_roll_results(results):
 
 
 def markdown_bold_to_html(text: str) -> str:
-    """Convert all **bold** markers to <b>bold</b>, not just the first pair."""
+    """Convert **bold** markers to <b>bold</b>, coloring crit/fumble totals green/red."""
+    text = re.sub(
+        r"\*\*(.+?)\*\* 🎯 CRIT!",
+        r'<b><font color="green">\1 CRIT!</font></b>',
+        text,
+    )
+    text = re.sub(
+        r"\*\*(.+?)\*\* 💥 FUMBLE!",
+        r'<b><font color="red">\1 FUMBLE!</font></b>',
+        text,
+    )
+    text = re.sub(r"(\d+)🎯", r'<b><font color="green">\1</font></b>🎯', text)
+    text = re.sub(r"(\d+)💥", r'<b><font color="red">\1</font></b>💥', text)
     return re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text)
 
 
