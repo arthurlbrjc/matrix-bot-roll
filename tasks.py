@@ -50,10 +50,14 @@ def clean_store(c):
     store_path = os.environ["MATRIX_STORE_PATH"]
 
     if os.path.isdir(store_path):
-        confirm = input(f"This will delete {store_path}. Type 'yes' to confirm: ")
+        confirm = input(f"This will empty {store_path}. Type 'yes' to confirm: ")
         if confirm.strip().lower() == "yes":
-            shutil.rmtree(store_path)
-            print(f"Removed {store_path}")
+            for entry in os.scandir(store_path):
+                if entry.is_dir(follow_symlinks=False):
+                    shutil.rmtree(entry.path)
+                else:
+                    os.remove(entry.path)
+            print(f"Emptied {store_path}")
         else:
             print("Aborted.")
     else:

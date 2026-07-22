@@ -24,6 +24,7 @@ USER_ID = os.environ["MATRIX_USER_ID"]
 ACCESS_TOKEN = os.environ["MATRIX_ACCESS_TOKEN"]
 DEVICE_ID = os.environ["MATRIX_DEVICE_ID"]
 STORE_PATH = os.environ["MATRIX_STORE_PATH"]
+os.makedirs(STORE_PATH, exist_ok=True)
 
 # Matches things like: 1d20, 2d6+4, d8, 3d10-2 (tolerates stray whitespace)
 DICE_RE = re.compile(r"^(\d*)\s*d\s*(\d+)\s*([+-]\s*\d+)?$", re.IGNORECASE)
