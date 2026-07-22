@@ -15,13 +15,13 @@ import shutil
 from invoke import task
 
 BOT_SCRIPT = "matrix-bot-roll.py"  # adjust if your entrypoint file has a different name
-STORE_DIR = "./store"
 
 
 @task
 def run(c):
     """Run the bot."""
     c.run(f"poetry run python {BOT_SCRIPT}", pty=True)
+
 
 @task
 def watch(c):
@@ -44,15 +44,20 @@ def clean_store(c):
     of previously-seen encrypted messages. Use only if the store
     is corrupted or you're resetting the bot's session.
     """
-    if os.path.isdir(STORE_DIR):
-        confirm = input(f"This will delete {STORE_DIR}. Type 'yes' to confirm: ")
+    from dotenv import load_dotenv
+
+    load_dotenv()
+    store_path = os.environ["MATRIX_STORE_PATH"]
+
+    if os.path.isdir(store_path):
+        confirm = input(f"This will delete {store_path}. Type 'yes' to confirm: ")
         if confirm.strip().lower() == "yes":
-            shutil.rmtree(STORE_DIR)
-            print(f"Removed {STORE_DIR}")
+            shutil.rmtree(store_path)
+            print(f"Removed {store_path}")
         else:
             print("Aborted.")
     else:
-        print(f"No store directory found at {STORE_DIR}")
+        print(f"No store directory found at {store_path}")
 
 
 @task
@@ -92,6 +97,7 @@ def env_check(c):
             print(f"  - {var}")
         raise SystemExit(1)
     print("All required .env variables are set.")
+
 
 @task
 def pingtest(c):
