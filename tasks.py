@@ -44,6 +44,12 @@ def check(c):
 
 
 @task
+def test(c):
+    """Run the test suite."""
+    c.run("poetry run pytest", pty=True)
+
+
+@task
 def clean_store(c):
     """
     Wipe the local nio store (encryption keys + sync tokens).

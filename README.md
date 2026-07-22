@@ -79,6 +79,7 @@ In a room the bot has joined:
 
 ```bash
 invoke check                   # format with black, lint with flake8, type-check with mypy
+invoke test                    # run the test suite
 poetry run invoke clean        # remove __pycache__, caches, build artifacts
 poetry run invoke clean-store  # wipe ./store (encryption keys + sync tokens); prompts for confirmation
 ```

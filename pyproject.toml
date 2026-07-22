@@ -9,7 +9,8 @@ license = {text = "MIT"}
 requires-python = ">=3.14,<4.0"
 dependencies = [
     "matrix-nio[e2e] (>=0.25.2,<0.26.0)",
-    "python-dotenv (>=1.2.2,<2.0.0)"
+    "python-dotenv (>=1.2.2,<2.0.0)",
+    "pytest (>=9.1.1,<10.0.0)"
 ]
 
 [tool.poetry]
@@ -22,6 +23,9 @@ build-backend = "poetry.core.masonry.api"
 [tool.black]
 target-version = ["py314"]
 
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
 [[tool.mypy.overrides]]
 module = "nio.*"
 ignore_missing_imports = true
@@ -32,5 +36,6 @@ dev = [
     "watchfiles (>=1.2.0,<2.0.0)",
     "black (>=26.5.1,<27.0.0)",
     "flake8 (>=7.3.0,<8.0.0)",
-    "mypy (>=2.3.0,<3.0.0)"
+    "mypy (>=2.3.0,<3.0.0)",
+    "pytest (>=9.0.3,<10.0.0)"
 ]
