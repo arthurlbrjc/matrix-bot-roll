@@ -17,7 +17,9 @@ def format_roll_results(results):
             lines.append(f"`{expr}` → invalid expression")
             continue
         total, detail, crit = result
-        suffix = " 🎯 CRIT!" if crit == "crit" else " 💥 FUMBLE!" if crit == "fumble" else ""
+        suffix = (
+            " 🎯 CRIT!" if crit == "crit" else " 💥 FUMBLE!" if crit == "fumble" else ""
+        )
         lines.append(f"🎲 {expr} → {detail} = **{total}**{suffix}")
         grand_total += total
         valid_count += 1

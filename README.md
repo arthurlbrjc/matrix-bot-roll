@@ -51,7 +51,7 @@ A Matrix bot that listens for `!roll` commands and replies with dice roll result
 ## Usage
 
 ```bash
-invoke run          # run the bot
+invoke run           # run the bot
 invoke watch         # run the bot, auto-restarting on .py/.env changes
 ```
 
@@ -78,6 +78,7 @@ In a room the bot has joined:
 ## Other tasks
 
 ```bash
+invoke check                   # format with black, lint with flake8, type-check with mypy
 poetry run invoke clean        # remove __pycache__, caches, build artifacts
 poetry run invoke clean-store  # wipe ./store (encryption keys + sync tokens); prompts for confirmation
 ```

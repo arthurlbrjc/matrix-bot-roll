@@ -36,6 +36,14 @@ def watch(c):
 
 
 @task
+def check(c):
+    """Format code with black, then lint with flake8, then type-check with mypy."""
+    c.run("poetry run black .", pty=True)
+    c.run("poetry run flake8 .", pty=True)
+    c.run("poetry run mypy .", pty=True)
+
+
+@task
 def clean_store(c):
     """
     Wipe the local nio store (encryption keys + sync tokens).
@@ -78,7 +86,10 @@ def clean(c):
         "*.egg-info",
     ]
     for pattern in patterns:
-        c.run(f"find . -path './.venv' -prune -o -name '{os.path.basename(pattern)}' -print0 | xargs -0 rm -rf", warn=True)
+        c.run(
+            f"find . -path './.venv' -prune -o -name '{os.path.basename(pattern)}' -print0 | xargs -0 rm -rf",
+            warn=True,
+        )
 
 
 @task
@@ -105,4 +116,7 @@ def env_check(c):
 
 @task
 def pingtest(c):
-    c.run("python3 -c \"import time; print('start'); time.sleep(30); print('end')\"", pty=True)
+    c.run(
+        "python3 -c \"import time; print('start'); time.sleep(30); print('end')\"",
+        pty=True,
+    )

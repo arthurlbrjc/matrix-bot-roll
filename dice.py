@@ -30,7 +30,7 @@ def roll_multiple(input_str: str):
     return [(expr, roll_dice(expr)) for expr in exprs]
 
 
-def roll_dice_group(count: int, sides: int, modifier: int, keep_str: str = None):
+def roll_dice_group(count: int, sides: int, modifier: int, keep_str: str):
     """
     Roll `count` dice of `sides`, applying `modifier` to each die individually,
     then optionally keep/advantage-select among the modified values via `keep_str`
@@ -70,7 +70,9 @@ def roll_dice_group(count: int, sides: int, modifier: int, keep_str: str = None)
     sign = "+" if modifier > 0 else "-"
     modified = [max(0, r + modifier) for r in rolls]
     pairs = list(zip(rolls, modified))
-    detail = f"[{', '.join(f'{mark(r)}{sign}{abs(modifier)}=**{m}**' for r, m in pairs)}]"
+    detail = (
+        f"[{', '.join(f'{mark(r)}{sign}{abs(modifier)}=**{m}**' for r, m in pairs)}]"
+    )
 
     if keep_mode == "h":
         kept = sorted(pairs, key=lambda p: p[1], reverse=True)[:keep_n]

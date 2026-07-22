@@ -25,7 +25,9 @@ async def run_client(message_callback, invite_callback):
     `message_callback(client, room, event)` and `invite_callback(client, room)`.
     """
     config = AsyncClientConfig(store_sync_tokens=True, encryption_enabled=True)
-    client = AsyncClient(HOMESERVER, USER_ID, device_id=DEVICE_ID, config=config, store_path=STORE_PATH)
+    client = AsyncClient(
+        HOMESERVER, USER_ID, device_id=DEVICE_ID, config=config, store_path=STORE_PATH
+    )
 
     client.restore_login(
         user_id=USER_ID,
@@ -36,7 +38,7 @@ async def run_client(message_callback, invite_callback):
     stop_event = asyncio.Event()
 
     def request_shutdown():
-        print(f"\nShutdown requested, closing connections...")
+        print("\nShutdown requested, closing connections...")
         stop_event.set()
 
     loop = asyncio.get_running_loop()

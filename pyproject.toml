@@ -19,8 +19,18 @@ package-mode = false
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
+[tool.black]
+target-version = ["py314"]
+
+[[tool.mypy.overrides]]
+module = "nio.*"
+ignore_missing_imports = true
+
 [dependency-groups]
 dev = [
     "invoke (>=3.0.3,<4.0.0)",
-    "watchfiles (>=1.2.0,<2.0.0)"
+    "watchfiles (>=1.2.0,<2.0.0)",
+    "black (>=26.5.1,<27.0.0)",
+    "flake8 (>=7.3.0,<8.0.0)",
+    "mypy (>=2.3.0,<3.0.0)"
 ]

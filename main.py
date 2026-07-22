@@ -10,7 +10,9 @@ from matrix_client import run_client
 print(f"Starting bot, PID={os.getpid()}", flush=True)
 
 
-async def message_callback(client: AsyncClient, room: MatrixRoom, event: RoomMessageText):
+async def message_callback(
+    client: AsyncClient, room: MatrixRoom, event: RoomMessageText
+):
     # Ignore our own messages
     if event.sender == client.user_id:
         return
@@ -52,7 +54,7 @@ async def message_callback(client: AsyncClient, room: MatrixRoom, event: RoomMes
         room_id=room.room_id,
         message_type="m.room.message",
         content=content,
-        ignore_unverified_devices=True
+        ignore_unverified_devices=True,
     )
 
 
