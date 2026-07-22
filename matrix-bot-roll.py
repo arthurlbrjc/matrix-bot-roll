@@ -26,8 +26,11 @@ DEVICE_ID = os.environ["MATRIX_DEVICE_ID"]
 STORE_PATH = os.environ["MATRIX_STORE_PATH"]
 os.makedirs(STORE_PATH, exist_ok=True)
 
-# Matches things like: 1d20, 2d6+4, d8, 3d10-2 (tolerates stray whitespace)
-DICE_RE = re.compile(r"^(\d*)\s*d\s*(\d+)\s*([+-]\s*\d+)?$", re.IGNORECASE)
+# Matches things like: 1d20, 2d6+4, d8, 3d10-2, 2d20kh1, 4d6kl3, 2d20adv, 2d20dis
+# (tolerates stray whitespace)
+DICE_RE = re.compile(
+    r"^(\d*)\s*d\s*(\d+)\s*(kh\d+|kl\d+|adv|dis)?\s*([+-]\s*\d+)?$", re.IGNORECASE
+)
 
 
 def roll_multiple(input_str: str):
@@ -45,12 +48,12 @@ def roll_multiple(input_str: str):
 
 
 def roll_dice(expr: str):
-    """Parse and roll a dice expression like '2d6+4'. Returns (total, detail_str) or None."""
+    """Parse and roll a dice expression like '2d6+4' or '2d20kh1'. Returns (total, detail_str) or None."""
     match = DICE_RE.match(expr.strip())
     if not match:
         return None
 
-    count_str, sides_str, modifier_str = match.groups()
+    count_str, sides_str, keep_str, modifier_str = match.groups()
     count = int(count_str) if count_str else 1
     sides = int(sides_str)
     modifier = int(modifier_str.replace(" ", "")) if modifier_str else 0
@@ -59,10 +62,42 @@ def roll_dice(expr: str):
     if count < 1 or count > 100 or sides < 2 or sides > 1000:
         return None
 
+    keep_mode = None
+    keep_n = None
+    adv_dis = None
+    if keep_str:
+        keep_str = keep_str.lower()
+        if keep_str == "adv":
+            keep_mode, keep_n = "h", count
+            count += 1  # adv/dis roll one extra die, then drop the single worst/best
+            adv_dis = "advantage"
+        elif keep_str == "dis":
+            keep_mode, keep_n = "l", count
+            count += 1
+            adv_dis = "disadvantage"
+        else:
+            keep_mode, keep_n = keep_str[1], int(keep_str[2:])
+
+        if count > 100 or keep_n < 1 or keep_n > count:
+            return None
+
     rolls = [random.randint(1, sides) for _ in range(count)]
-    total = sum(rolls) + modifier
+
+    if keep_mode == "h":
+        kept = sorted(rolls, reverse=True)[:keep_n]
+    elif keep_mode == "l":
+        kept = sorted(rolls)[:keep_n]
+    else:
+        kept = rolls
+
+    total = sum(kept) + modifier
 
     detail = f"[{', '.join(map(str, rolls))}]"
+    if adv_dis:
+        detail += f" with {adv_dis} → [{', '.join(map(str, kept))}]"
+    elif keep_mode:
+        word = "highest" if keep_mode == "h" else "lowest"
+        detail += f" keep {word} {keep_n} → [{', '.join(map(str, kept))}]"
     if modifier:
         sign = "+" if modifier > 0 else ""
         detail += f" {sign}{modifier}"
@@ -111,7 +146,10 @@ async def message_callback(client: AsyncClient, room: MatrixRoom, event: RoomMes
 
     parts = body.split(maxsplit=1)
     if len(parts) < 2:
-        reply = "Usage: !roll 1d20, !roll 2d6+4, !roll 4d20 1d6, etc."
+        reply = (
+            "Usage: !roll d20, !roll 2d6+4, !roll 4d20 1d6, "
+            "!roll 2d20kh1, !roll 4d6kl3, !roll 2d20adv, !roll 2d20dis, etc."
+        )
     else:
         expr = parts[1].strip()
         results = roll_multiple(expr)
