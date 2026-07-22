@@ -3,7 +3,7 @@
 ![AI-Generated License Badge](vibe-coded-badge.svg)
 
 
-A single-file Matrix bot that listens for `!roll` commands and replies with dice roll results. Built on [matrix-nio](https://github.com/matrix-nio/matrix-nio) with E2E encryption support.
+A Matrix bot that listens for `!roll` commands and replies with dice roll results. Built on [matrix-nio](https://github.com/matrix-nio/matrix-nio) with E2E encryption support.
 
 ## Features
 
@@ -58,7 +58,7 @@ invoke watch         # run the bot, auto-restarting on .py/.env changes
 Or run directly without invoke:
 
 ```bash
-poetry run python matrix-bot-roll.py
+poetry run python main.py
 ```
 
 In a room the bot has joined:

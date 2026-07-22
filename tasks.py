@@ -14,7 +14,7 @@ import shutil
 
 from invoke import task
 
-BOT_SCRIPT = "matrix-bot-roll.py"  # adjust if your entrypoint file has a different name
+BOT_SCRIPT = "main.py"
 
 
 @task
