@@ -1,6 +1,7 @@
 import random
 import re
-from typing import Callable, List, Optional, Tuple, TypeVar
+from dataclasses import dataclass
+from typing import Callable, List, Optional, Set, Tuple, TypeVar
 
 T = TypeVar("T")
 
@@ -19,12 +20,36 @@ DICE_WITH_DIE_MODIFIER_RE = re.compile(
 )
 
 
-def roll(input_str: str):
+@dataclass
+class Die:
+    """A single rolled die: its raw face, its value after any per-die modifier, and whether it was kept."""
+
+    raw: int
+    value: int
+    kept: bool
+
+
+@dataclass
+class RollResult:
+    """The outcome of rolling one dice expression, free of any display formatting."""
+
+    total: int
+    dice: List[Die]
+    sides: int
+    modifier: int
+    modifier_mode: Optional[str]  # "total", "per_die", or None
+    keep_mode: Optional[str]  # "h", "l", or None
+    keep_n: Optional[int]
+    adv_dis: Optional[str]  # "advantage", "disadvantage", or None
+    crit: Optional[str]  # "crit", "fumble", or None
+
+
+def roll(input_str: str) -> List[Tuple[str, Optional[RollResult]]]:
     """
     Parse and roll multiple space-separated dice expressions, e.g. '4d20 1d6+2'.
 
-    Returns a list of tuples: (expr, result_or_None)
-    where result_or_None is (total, detail_str, crit) from roll_dice, or None if invalid.
+    Returns a list of (expr, result) tuples, where result is a RollResult, or
+    None if expr is not a valid dice expression.
     """
     exprs = input_str.split()
     if not exprs:
@@ -33,8 +58,8 @@ def roll(input_str: str):
     return [(expr, _roll_dice(expr)) for expr in exprs]
 
 
-def _roll_dice(expr: str):
-    """Parse and roll a dice expression like '2d6+4' or '2d20kh1'. Returns (total, detail_str, crit) or None."""
+def _roll_dice(expr: str) -> Optional[RollResult]:
+    """Parse and roll a dice expression like '2d6+4' or '2d20kh1'."""
     expr = expr.strip()
 
     die_modifier_match = DICE_WITH_DIE_MODIFIER_RE.match(expr)
@@ -48,7 +73,9 @@ def _roll_dice(expr: str):
     return None
 
 
-def _roll_with_total_modifier(total_modifier_match: "re.Match[str]"):
+def _roll_with_total_modifier(
+    total_modifier_match: "re.Match[str]",
+) -> Optional[RollResult]:
     """Roll dice for the plain syntax (e.g. '2d6+4'), applying `modifier` once to the summed total."""
     count_str, sides_str, keep_str, modifier_str = total_modifier_match.groups()
     count = int(count_str) if count_str else 1
@@ -60,23 +87,31 @@ def _roll_with_total_modifier(total_modifier_match: "re.Match[str]"):
         return None
     keep_mode, keep_n, adv_dis, count = resolved
 
-    rolls = [random.randint(1, sides) for _ in range(count)]
+    raws = [random.randint(1, sides) for _ in range(count)]
+    kept_indices = _select_kept_indices(raws, keep_mode, keep_n, key=lambda r: r)
+    dice = [Die(raw=r, value=r, kept=i in kept_indices) for i, r in enumerate(raws)]
 
-    kept = _select_kept(rolls, keep_mode, keep_n, key=lambda r: r)
-    total = max(0, sum(kept) + modifier)
+    kept_raws = [raws[i] for i in kept_indices]
+    total = max(0, sum(kept_raws) + modifier)
 
-    detail = f"[{', '.join(_mark(r, sides) for r in rolls)}]"
-    detail += _keep_suffix(keep_mode, keep_n, adv_dis, [_mark(r, sides) for r in kept])
-    if modifier:
-        sign = "+" if modifier > 0 else ""
-        detail += f" {sign}{modifier}"
+    crit = _natural_crit(kept_raws, sides)
 
-    crit = _natural_crit(kept, sides)
+    return RollResult(
+        total=total,
+        dice=dice,
+        sides=sides,
+        modifier=modifier,
+        modifier_mode="total" if modifier else None,
+        keep_mode=keep_mode,
+        keep_n=keep_n,
+        adv_dis=adv_dis,
+        crit=crit,
+    )
 
-    return total, detail, crit
 
-
-def _roll_with_die_modifier(die_modifier_match: "re.Match[str]"):
+def _roll_with_die_modifier(
+    die_modifier_match: "re.Match[str]",
+) -> Optional[RollResult]:
     """
     Roll dice for the per-die-modifier syntax (e.g. '4(d10+2)'), applying `modifier`
     to each die individually, then optionally keep/advantage-select among the
@@ -92,20 +127,30 @@ def _roll_with_die_modifier(die_modifier_match: "re.Match[str]"):
         return None
     keep_mode, keep_n, adv_dis, count = resolved
 
-    rolls = [random.randint(1, sides) for _ in range(count)]
+    raws = [random.randint(1, sides) for _ in range(count)]
+    values = [max(0, r + modifier) for r in raws]
+    kept_indices = _select_kept_indices(values, keep_mode, keep_n, key=lambda v: v)
+    dice = [
+        Die(raw=r, value=v, kept=i in kept_indices)
+        for i, (r, v) in enumerate(zip(raws, values))
+    ]
 
-    sign = "+" if modifier > 0 else "-"
-    modified = [max(0, r + modifier) for r in rolls]
-    pairs = list(zip(rolls, modified))
-    detail = f"[{', '.join(f'{_mark(r, sides)}{sign}{abs(modifier)}=**{m}**' for r, m in pairs)}]"
+    kept_raws = [raws[i] for i in kept_indices]
+    total = sum(values[i] for i in kept_indices)
 
-    kept = _select_kept(pairs, keep_mode, keep_n, key=lambda p: p[1])
-    total = sum(m for _, m in kept)
-    detail += _keep_suffix(keep_mode, keep_n, adv_dis, [f"**{m}**" for _, m in kept])
+    crit = _natural_crit(kept_raws, sides)
 
-    crit = _natural_crit([raw for raw, _ in kept], sides)
-
-    return total, detail, crit
+    return RollResult(
+        total=total,
+        dice=dice,
+        sides=sides,
+        modifier=modifier,
+        modifier_mode="per_die",
+        keep_mode=keep_mode,
+        keep_n=keep_n,
+        adv_dis=adv_dis,
+        crit=crit,
+    )
 
 
 def _validate(
@@ -152,48 +197,26 @@ def _resolve_keep(
     return keep_mode, keep_n, adv_dis, count
 
 
-def _select_kept(
+def _select_kept_indices(
     items: List[T],
     keep_mode: Optional[str],
     keep_n: Optional[int],
     key: Callable[[T], int],
-) -> List[T]:
-    """Select the highest/lowest `keep_n` items by `key`, or all items if no keep mode."""
-    if keep_mode == "h":
-        return sorted(items, key=key, reverse=True)[:keep_n]
-    elif keep_mode == "l":
-        return sorted(items, key=key)[:keep_n]
-    return items
+) -> Set[int]:
+    """Indices of the highest/lowest `keep_n` items by `key`, or all indices if no keep mode."""
+    if keep_mode is None:
+        return set(range(len(items)))
+
+    indexed = list(enumerate(items))
+    indexed.sort(key=lambda pair: key(pair[1]), reverse=(keep_mode == "h"))
+    return {i for i, _ in indexed[:keep_n]}
 
 
-def _mark(n: int, sides: int) -> str:
-    if n == sides:
-        return f"{n}🎯"
-    elif n == 1:
-        return f"{n}💥"
-    return str(n)
-
-
-def _keep_suffix(
-    keep_mode: Optional[str],
-    keep_n: Optional[int],
-    adv_dis: Optional[str],
-    formatted_kept: List[str],
-) -> str:
-    """Build the ' with {adv_dis} → [...]' / ' keep {word} {n} → [...]' detail suffix."""
-    if adv_dis:
-        return f" with {adv_dis} → [{', '.join(formatted_kept)}]"
-    elif keep_mode:
-        word = "highest" if keep_mode == "h" else "lowest"
-        return f" keep {word} {keep_n} → [{', '.join(formatted_kept)}]"
-    return ""
-
-
-def _natural_crit(raw_values: list, sides: int) -> Optional[str]:
+def _natural_crit(kept_raws: List[int], sides: int) -> Optional[str]:
     """A single kept die at its raw max/min face is a natural crit/fumble."""
-    if len(raw_values) != 1:
+    if len(kept_raws) != 1:
         return None
-    raw = raw_values[0]
+    raw = kept_raws[0]
     if raw == sides:
         return "crit"
     elif raw == 1:
