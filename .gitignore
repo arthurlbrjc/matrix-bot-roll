@@ -8,5 +8,5 @@
 .idea
 .env
 synapse-data/
-store/
+store*
 __pycache__/

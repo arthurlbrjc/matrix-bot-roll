@@ -5,6 +5,7 @@ import signal
 
 from dotenv import load_dotenv
 from nio import AsyncClient, AsyncClientConfig, MatrixRoom, MegolmEvent, RoomMessageText
+from nio.exceptions import LocalProtocolError
 
 load_dotenv()
 
@@ -106,4 +107,10 @@ async def _request_missing_session_key(
         "Requesting missing room key",
         extra={"room_id": room.room_id, "session_id": event.session_id},
     )
-    await client.request_room_key(event)
+    try:
+        await client.request_room_key(event)
+    except LocalProtocolError:
+        logger.info(
+            "Room key already requested for this session",
+            extra={"session_id": event.session_id},
+        )
