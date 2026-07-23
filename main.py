@@ -15,10 +15,6 @@ _last_rolls: dict[str, str] = {}
 async def message_callback(
     client: AsyncClient, room: MatrixRoom, event: RoomMessageText
 ):
-    # Ignore our own messages
-    if event.sender == client.user_id:
-        return
-
     body = event.body.strip()
     if body.startswith("!reroll"):
         reply = _handle_reroll(room.room_id)
@@ -78,13 +74,8 @@ def _handle_reroll(room_id: str) -> str:
     return format_roll_results(roll(expr))
 
 
-async def invite_callback(client: AsyncClient, room):
-    await client.join(room.room_id)
-    print(f"Joined room {room.room_id}")
-
-
 async def main():
-    await run_client(message_callback, invite_callback)
+    await run_client(message_callback)
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ import signal
 import sys
 
 from dotenv import load_dotenv
-from nio import AsyncClient, AsyncClientConfig, InviteMemberEvent, RoomMessageText
+from nio import AsyncClient, AsyncClientConfig, RoomMessageText
 
 load_dotenv()
 
@@ -16,13 +16,12 @@ STORE_PATH = os.environ["MATRIX_STORE_PATH"]
 os.makedirs(STORE_PATH, exist_ok=True)
 
 
-async def run_client(message_callback, invite_callback):
+async def run_client(message_callback):
     """
     Log in, wire up event callbacks, and run the sync loop until a
     shutdown signal (SIGINT/SIGTERM) is received.
 
-    `message_callback` and `invite_callback` are called as
-    `message_callback(client, room, event)` and `invite_callback(client, room)`.
+    `message_callback` is called as `message_callback(client, room, event)`.
     """
     config = AsyncClientConfig(store_sync_tokens=True, encryption_enabled=True)
     client = AsyncClient(
@@ -55,9 +54,6 @@ async def run_client(message_callback, invite_callback):
 
         client.add_event_callback(
             lambda room, event: message_callback(client, room, event), RoomMessageText
-        )
-        client.add_event_callback(
-            lambda room, event: invite_callback(client, room), InviteMemberEvent
         )
 
         await client.sync(timeout=30000, full_state=True)
