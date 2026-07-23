@@ -3,7 +3,7 @@ import os
 
 from nio import AsyncClient, MatrixRoom, RoomMessageText
 
-from dice import roll_multiple
+from dice import roll
 from formatting import format_roll_results, markdown_to_html
 from matrix_client import run_client
 
@@ -40,7 +40,7 @@ async def message_callback(
         )
     else:
         expr = parts[1].strip()
-        results = roll_multiple(expr)
+        results = roll(expr)
         reply = format_roll_results(results)
 
     content = {
