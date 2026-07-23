@@ -22,4 +22,6 @@ USER bot
 
 VOLUME ["/app/store"]
 
+EXPOSE 8080
+
 CMD ["python", "main.py"]

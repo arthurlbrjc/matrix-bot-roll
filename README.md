@@ -104,6 +104,8 @@ docker compose up
 
 State (encryption keys, sync tokens) persists to `MATRIX_STORE_PATH` between runs.
 
+The bot also binds a minimal HTTP endpoint on `PORT` (default `8080`) that always replies `200 OK`. It exists solely to satisfy cloud platforms that health-check a port before considering a container alive (e.g. Scaleway Serverless Containers) — it is not a real API and shouldn't be treated as one.
+
 ## 🤖 AI Transparency
 
 This project is made with ai.

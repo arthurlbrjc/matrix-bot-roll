@@ -5,6 +5,7 @@ from nio import AsyncClient, MatrixRoom, RoomMessageText
 
 from dice import roll
 from formatting import format_roll_results, markdown_to_html
+from health_check import serve_health_check
 from matrix_client import run_client
 
 print(f"Starting bot, PID={os.getpid()}", flush=True)
@@ -75,7 +76,10 @@ def _handle_reroll(room_id: str) -> str:
 
 
 async def main():
-    await run_client(message_callback)
+    tasks = [run_client(message_callback)]
+    if os.environ.get("ENABLE_HEALTH_CHECK", "").lower() in ("1", "true", "yes"):
+        tasks.append(serve_health_check())
+    await asyncio.gather(*tasks)
 
 
 if __name__ == "__main__":
