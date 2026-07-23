@@ -26,6 +26,9 @@ target-version = ["py314"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 
+[tool.mypy]
+exclude = ["(^|/)\\.venv/"]
+
 [[tool.mypy.overrides]]
 module = "nio.*"
 ignore_missing_imports = true

@@ -1,0 +1,27 @@
+name: Setup
+description: Set up Python, Poetry, and install dependencies (with caching)
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.14"
+
+    - name: Install Poetry
+      shell: bash
+      run: pipx install poetry
+
+    - name: Cache Poetry virtualenv
+      uses: actions/cache@v4
+      with:
+        path: .venv
+        key: poetry-${{ runner.os }}-${{ hashFiles('poetry.lock') }}
+
+    - name: Configure Poetry to use in-project venv
+      shell: bash
+      run: poetry config virtualenvs.in-project true
+
+    - name: Install dependencies
+      shell: bash
+      run: poetry install

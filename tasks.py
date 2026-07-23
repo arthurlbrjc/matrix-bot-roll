@@ -44,6 +44,14 @@ def check(c):
 
 
 @task
+def ci_check(c):
+    """Verify formatting with black, lint with flake8, and type-check with mypy (no fixing)."""
+    c.run("poetry run black --check .", pty=True)
+    c.run("poetry run flake8 .", pty=True)
+    c.run("poetry run mypy .", pty=True)
+
+
+@task
 def test(c):
     """Run the test suite."""
     c.run("poetry run pytest", pty=True)
