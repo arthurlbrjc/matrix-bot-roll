@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 
 from nio import AsyncClient, MatrixRoom, RoomMessageText
@@ -6,9 +7,12 @@ from nio import AsyncClient, MatrixRoom, RoomMessageText
 from dice import roll
 from formatting import format_roll_results, markdown_to_html
 from health_check import serve_health_check
+from logging_setup import configure_logging
 from matrix_client import run_client
 
-print(f"Starting bot, PID={os.getpid()}", flush=True)
+configure_logging()
+logger = logging.getLogger(__name__)
+logger.info("Starting bot", extra={"pid": os.getpid()})
 
 _last_rolls: dict[str, str] = {}
 
@@ -87,4 +91,8 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         # Fallback in case signal handlers didn't fire in time (e.g. Windows)
-        print("\nInterrupted.")
+        logger.info("Interrupted")
+    except Exception:
+        # Last resort so a crash is a JSON log line, not a bare stderr traceback.
+        logger.exception("Unhandled exception, shutting down")
+        raise SystemExit(1)

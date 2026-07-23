@@ -1,12 +1,14 @@
 import asyncio
+import logging
 import os
 import signal
-import sys
 
 from dotenv import load_dotenv
 from nio import AsyncClient, AsyncClientConfig, RoomMessageText
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 HOMESERVER = os.environ["MATRIX_BASE_URL"]
 USER_ID = os.environ["MATRIX_USER_ID"]
@@ -37,7 +39,7 @@ async def run_client(message_callback):
     stop_event = asyncio.Event()
 
     def request_shutdown():
-        print("\nShutdown requested, closing connections...")
+        logger.info("Shutdown requested, closing connections")
         stop_event.set()
 
     loop = asyncio.get_running_loop()
@@ -47,10 +49,10 @@ async def run_client(message_callback):
     try:
         whoami = await client.whoami()
         if not hasattr(whoami, "user_id"):
-            print(f"Failed to authenticate: {whoami}", file=sys.stderr)
+            logger.error("Failed to authenticate", extra={"response": str(whoami)})
             return
 
-        print(f"Logged in as {whoami.user_id}")
+        logger.info("Logged in", extra={"user_id": whoami.user_id})
 
         client.add_event_callback(
             lambda room, event: message_callback(client, room, event), RoomMessageText
@@ -83,6 +85,6 @@ async def run_client(message_callback):
                 raise exc
 
     finally:
-        print("Closing Matrix client...")
+        logger.info("Closing Matrix client")
         await client.close()
-        print("Done.")
+        logger.info("Done")
