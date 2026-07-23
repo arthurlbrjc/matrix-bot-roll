@@ -2,7 +2,7 @@ import html
 import re
 from typing import List, Optional, Tuple
 
-from dice import Die, RollResult
+from models import Die, RollResult
 
 
 def format_roll_results(results: List[Tuple[str, Optional[RollResult]]]) -> str:
