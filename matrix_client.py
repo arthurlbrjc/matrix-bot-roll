@@ -4,7 +4,7 @@ import os
 import signal
 
 from dotenv import load_dotenv
-from nio import AsyncClient, AsyncClientConfig, RoomMessageText
+from nio import AsyncClient, AsyncClientConfig, MatrixRoom, MegolmEvent, RoomMessageText
 
 load_dotenv()
 
@@ -57,6 +57,10 @@ async def run_client(message_callback):
         client.add_event_callback(
             lambda room, event: message_callback(client, room, event), RoomMessageText
         )
+        client.add_event_callback(
+            lambda room, event: _request_missing_session_key(client, room, event),
+            MegolmEvent,
+        )
 
         await client.sync(timeout=30000, full_state=True)
 
@@ -88,3 +92,18 @@ async def run_client(message_callback):
         logger.info("Closing Matrix client")
         await client.close()
         logger.info("Done")
+
+
+async def _request_missing_session_key(
+    client: AsyncClient, room: MatrixRoom, event: MegolmEvent
+) -> None:
+    """Ask the sending device to (re)share a Megolm session we failed to decrypt.
+
+    Needed because a fresh/reset crypto store has no Olm session with devices
+    it talked to before, so senders won't proactively re-share the session.
+    """
+    logger.warning(
+        "Requesting missing room key",
+        extra={"room_id": room.room_id, "session_id": event.session_id},
+    )
+    await client.request_room_key(event)
