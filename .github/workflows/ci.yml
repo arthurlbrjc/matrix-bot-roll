@@ -57,16 +57,16 @@ jobs:
       group: deploy
       cancel-in-progress: false
     steps:
-      - name: Install Scaleway CLI
-        run: curl -s https://raw.githubusercontent.com/scaleway/scaleway-cli/master/scripts/get.sh | sh
-
-      - name: Redeploy container
+      - name: Redeploy container via Scaleway API
         env:
-          SCW_ACCESS_KEY: ${{ secrets.SCW_ACCESS_KEY }}
           SCW_SECRET_KEY: ${{ secrets.SCW_SECRET_KEY }}
-          SCW_DEFAULT_ORGANIZATION_ID: ${{ secrets.SCW_DEFAULT_ORGANIZATION_ID }}
           SCW_DEFAULT_PROJECT_ID: ${{ secrets.SCW_DEFAULT_PROJECT_ID }}
-          SCW_DEFAULT_REGION: fr-par
         run: |
-          container_id=$(scw container container list name=matrix-bot-roll -o json | jq -r '.[0].id')
-          scw container container redeploy "$container_id"
+          container_id=$(curl -sS \
+            -H "X-Auth-Token: ${SCW_SECRET_KEY}" \
+            "https://api.scaleway.com/containers/v1beta1/regions/fr-par/containers?name=matrix-bot-roll&project_id=${SCW_DEFAULT_PROJECT_ID}" \
+            | jq -r '.containers[0].id')
+
+          curl -sS -X POST \
+            -H "X-Auth-Token: ${SCW_SECRET_KEY}" \
+            "https://api.scaleway.com/containers/v1beta1/regions/fr-par/containers/${container_id}/deploy"
