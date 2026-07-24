@@ -18,12 +18,36 @@ BOT_SCRIPT = "main.py"
 
 
 @task
+def env_check(c):
+    """Verify required .env variables are set (without printing secrets)."""
+    from dotenv import load_dotenv
+
+    load_dotenv()
+    required = [
+        "MATRIX_BASE_URL",
+        "MATRIX_DEVICE_NAME",
+        "MATRIX_PASSWORD",
+        "MATRIX_USER_ID",
+        "MATRIX_STORE_PATH",
+    ]
+    if os.environ.get("MATRIX_SESSION_MODE") == "persistent":
+        required.append("MATRIX_SESSION_ENCRYPTION_KEY")
+    missing = [var for var in required if not os.environ.get(var)]
+    if missing:
+        print("Missing or empty .env variables:")
+        for var in missing:
+            print(f"  - {var}")
+        raise SystemExit(1)
+    print("All required .env variables are set.")
+
+
+@task(pre=[env_check])
 def run(c):
     """Run the bot."""
     c.run(f"poetry run python {BOT_SCRIPT}", pty=True)
 
 
-@task
+@task(pre=[env_check])
 def watch(c):
     """Run the bot, auto-restarting on .py and .env changes."""
     c.run(
@@ -112,30 +136,6 @@ def clean(c):
             f"find . -path './.venv' -prune -o -name '{os.path.basename(pattern)}' -print0 | xargs -0 rm -rf",
             warn=True,
         )
-
-
-@task
-def env_check(c):
-    """Verify required .env variables are set (without printing secrets)."""
-    from dotenv import load_dotenv
-
-    load_dotenv()
-    required = [
-        "MATRIX_BASE_URL",
-        "MATRIX_DEVICE_NAME",
-        "MATRIX_PASSWORD",
-        "MATRIX_USER_ID",
-        "MATRIX_STORE_PATH",
-    ]
-    if os.environ.get("MATRIX_SESSION_MODE") == "persistent":
-        required.append("MATRIX_SESSION_ENCRYPTION_KEY")
-    missing = [var for var in required if not os.environ.get(var)]
-    if missing:
-        print("Missing or empty .env variables:")
-        for var in missing:
-            print(f"  - {var}")
-        raise SystemExit(1)
-    print("All required .env variables are set.")
 
 
 @task
