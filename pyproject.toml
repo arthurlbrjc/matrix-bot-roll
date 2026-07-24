@@ -10,7 +10,8 @@ requires-python = ">=3.14,<4.0"
 dependencies = [
     "matrix-nio[e2e] (>=0.25.2,<0.26.0)",
     "python-dotenv (>=1.2.2,<2.0.0)",
-    "pytest (>=9.1.1,<10.0.0)"
+    "pytest (>=9.1.1,<10.0.0)",
+    "cryptography (>=49.0.0,<50.0.0)"
 ]
 
 [tool.poetry]

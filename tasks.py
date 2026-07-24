@@ -58,6 +58,14 @@ def test(c):
 
 
 @task
+def generate_session_key(c):
+    """Generate a key for MATRIX_SESSION_ENCRYPTION_KEY (used by MATRIX_SESSION_MODE=persistent)."""
+    from cryptography.fernet import Fernet
+
+    print(Fernet.generate_key().decode())
+
+
+@task
 def clean_store(c):
     """
     Wipe the local nio store (encryption keys + sync tokens).
@@ -113,12 +121,14 @@ def env_check(c):
 
     load_dotenv()
     required = [
-        "MATRIX_ACCESS_TOKEN",
         "MATRIX_BASE_URL",
-        "MATRIX_DEVICE_ID",
+        "MATRIX_DEVICE_NAME",
+        "MATRIX_PASSWORD",
         "MATRIX_USER_ID",
         "MATRIX_STORE_PATH",
     ]
+    if os.environ.get("MATRIX_SESSION_MODE") == "persistent":
+        required.append("MATRIX_SESSION_ENCRYPTION_KEY")
     missing = [var for var in required if not os.environ.get(var)]
     if missing:
         print("Missing or empty .env variables:")

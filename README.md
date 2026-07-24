@@ -39,9 +39,24 @@ A Matrix bot that listens for `!roll` commands and replies with dice roll result
    ```
    MATRIX_BASE_URL=https://your.homeserver
    MATRIX_USER_ID=@your-bot:your.homeserver
-   MATRIX_ACCESS_TOKEN=your-access-token
-   MATRIX_DEVICE_ID=your-device-id
+   MATRIX_PASSWORD=your-bot-password
+   MATRIX_DEVICE_NAME=matrix-bot-roll
    MATRIX_STORE_PATH=./store
+   ```
+
+   `MATRIX_DEVICE_NAME` is the device name shown to other clients.
+
+   By default (`MATRIX_SESSION_MODE=fresh`, or unset) the bot logs in fresh on every start and logs out on shutdown — see [Architecture](#architecture). If your host persists `MATRIX_STORE_PATH` across restarts (e.g. local development), you can instead reuse the same login/device between runs:
+
+   ```
+   MATRIX_SESSION_MODE=persistent
+   MATRIX_SESSION_ENCRYPTION_KEY=your-generated-key
+   ```
+
+   Generate a key for `MATRIX_SESSION_ENCRYPTION_KEY` with:
+
+   ```bash
+   poetry run invoke generate-session-key
    ```
 
    Optionally, override the dice sanity limits (defaults: 100 and 100):
@@ -111,7 +126,10 @@ docker compose up
 
 ## Architecture
 
-State (encryption keys, sync tokens) persists to `MATRIX_STORE_PATH` between runs.
+Login behavior is controlled by `MATRIX_SESSION_MODE`:
+
+- **`fresh`** (default): the bot logs in with a password login (`MATRIX_PASSWORD`) on every start and logs out on shutdown, so a new device and matching encryption keys are created each run rather than reusing a fixed access token/device ID. `MATRIX_STORE_PATH` only needs to hold state (encryption keys, sync tokens) for the lifetime of a single run — it's not expected to persist across restarts. This is the right choice for the bot's hosting platform, Scaleway Serverless Containers, which does not persist local disk across container restarts — relying on a long-lived device identity there would leave other clients with stale keys for a device ID that no longer matches them.
+- **`persistent`**: the bot saves its login (user ID, device ID, access token) to an encrypted file inside `MATRIX_STORE_PATH`, encrypted with `MATRIX_SESSION_ENCRYPTION_KEY` (a [Fernet](https://cryptography.io/en/latest/fernet/) key). On each start it tries to restore and verify that saved session before falling back to a fresh login; on shutdown it does *not* log out, so the same device persists across restarts. Only use this where `MATRIX_STORE_PATH` genuinely survives restarts (e.g. local development) — on ephemeral storage it degrades to always logging in fresh anyway, but without ever cleaning up the resulting devices.
 
 The bot also binds a minimal HTTP endpoint on `PORT` (default `8080`) that always replies `200 OK`. It exists solely to satisfy cloud platforms that health-check a port before considering a container alive (e.g. Scaleway Serverless Containers) — it is not a real API and shouldn't be treated as one.
 

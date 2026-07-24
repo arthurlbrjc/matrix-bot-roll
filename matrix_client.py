@@ -6,6 +6,9 @@ import signal
 from dotenv import load_dotenv
 from nio import AsyncClient, AsyncClientConfig, MatrixRoom, MegolmEvent, RoomMessageText
 from nio.exceptions import LocalProtocolError
+from nio.responses import LoginResponse, WhoamiResponse
+
+from session_store import SavedSession, load_session, save_session
 
 load_dotenv()
 
@@ -13,10 +16,22 @@ logger = logging.getLogger(__name__)
 
 HOMESERVER = os.environ["MATRIX_BASE_URL"]
 USER_ID = os.environ["MATRIX_USER_ID"]
-ACCESS_TOKEN = os.environ["MATRIX_ACCESS_TOKEN"]
-DEVICE_ID = os.environ["MATRIX_DEVICE_ID"]
+PASSWORD = os.environ["MATRIX_PASSWORD"]
 STORE_PATH = os.environ["MATRIX_STORE_PATH"]
+DEVICE_NAME = os.environ["MATRIX_DEVICE_NAME"]
+SESSION_MODE = os.environ.get("MATRIX_SESSION_MODE", "fresh")
+SESSION_ENCRYPTION_KEY = os.environ.get("MATRIX_SESSION_ENCRYPTION_KEY")
 os.makedirs(STORE_PATH, exist_ok=True)
+SESSION_FILE = os.path.join(STORE_PATH, "session.enc")
+
+if SESSION_MODE not in ("fresh", "persistent"):
+    raise ValueError(
+        f"MATRIX_SESSION_MODE must be 'fresh' or 'persistent', got {SESSION_MODE!r}"
+    )
+if SESSION_MODE == "persistent" and not SESSION_ENCRYPTION_KEY:
+    raise ValueError(
+        "MATRIX_SESSION_ENCRYPTION_KEY is required when MATRIX_SESSION_MODE=persistent"
+    )
 
 
 async def run_client(message_callback):
@@ -27,15 +42,7 @@ async def run_client(message_callback):
     `message_callback` is called as `message_callback(client, room, event)`.
     """
     config = AsyncClientConfig(store_sync_tokens=True, encryption_enabled=True)
-    client = AsyncClient(
-        HOMESERVER, USER_ID, device_id=DEVICE_ID, config=config, store_path=STORE_PATH
-    )
-
-    client.restore_login(
-        user_id=USER_ID,
-        device_id=DEVICE_ID,
-        access_token=ACCESS_TOKEN,
-    )
+    client = AsyncClient(HOMESERVER, USER_ID, config=config, store_path=STORE_PATH)
 
     stop_event = asyncio.Event()
 
@@ -48,12 +55,10 @@ async def run_client(message_callback):
         loop.add_signal_handler(sig, request_shutdown)
 
     try:
-        whoami = await client.whoami()
-        if not hasattr(whoami, "user_id"):
-            logger.error("Failed to authenticate", extra={"response": str(whoami)})
+        if not await _authenticate(client):
             return
 
-        logger.info("Logged in", extra={"user_id": whoami.user_id})
+        logger.info("Logged in", extra={"user_id": client.user_id})
 
         client.add_event_callback(
             lambda room, event: message_callback(client, room, event), RoomMessageText
@@ -91,8 +96,68 @@ async def run_client(message_callback):
 
     finally:
         logger.info("Closing Matrix client")
+        if SESSION_MODE == "persistent":
+            logger.info("Keeping session for reuse on next start (persistent mode)")
+        else:
+            try:
+                await client.logout()
+            except Exception:
+                logger.warning("Failed to log out cleanly", exc_info=True)
         await client.close()
         logger.info("Done")
+
+
+async def _authenticate(client: AsyncClient) -> bool:
+    """Log `client` in, reusing a saved session in persistent mode when it's still valid.
+
+    Returns True on success. On failure, logs the reason and returns False.
+    """
+    if SESSION_MODE == "persistent":
+        assert SESSION_ENCRYPTION_KEY is not None  # enforced at module load
+        saved = load_session(SESSION_FILE, SESSION_ENCRYPTION_KEY)
+        if saved is None:
+            logger.info("No session found, logging in fresh")
+        elif await _restore_saved_session(client, saved):
+            return True
+
+    login_response = await client.login(PASSWORD, device_name=DEVICE_NAME)
+    if not isinstance(login_response, LoginResponse):
+        logger.error("Failed to authenticate", extra={"response": str(login_response)})
+        return False
+    assert client.device_id is not None  # set by a successful login
+    assert client.access_token is not None  # set by a successful login
+
+    if SESSION_MODE == "persistent":
+        assert SESSION_ENCRYPTION_KEY is not None  # enforced at module load
+        save_session(
+            SESSION_FILE,
+            SESSION_ENCRYPTION_KEY,
+            SavedSession(
+                user_id=client.user_id,
+                device_id=client.device_id,
+                access_token=client.access_token,
+            ),
+        )
+
+    return True
+
+
+async def _restore_saved_session(client: AsyncClient, saved: SavedSession) -> bool:
+    """Try restoring a saved session, verifying the token is still valid with the server."""
+    client.restore_login(
+        user_id=saved.user_id,
+        device_id=saved.device_id,
+        access_token=saved.access_token,
+    )
+    whoami_response = await client.whoami()
+    if not isinstance(whoami_response, WhoamiResponse):
+        logger.warning(
+            "Saved session is no longer valid, logging in fresh instead",
+            extra={"response": str(whoami_response)},
+        )
+        return False
+    logger.info("Reusing saved session", extra={"user_id": client.user_id})
+    return True
 
 
 async def _request_missing_session_key(
