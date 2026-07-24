@@ -47,7 +47,17 @@ def use_persistent_mode(monkeypatch):
     monkeypatch.setattr(matrix_client, "SESSION_ENCRYPTION_KEY", "test-key")
 
 
+def use_fresh_mode(monkeypatch):
+    """Switch matrix_client (already imported) into MATRIX_SESSION_MODE=fresh.
+
+    Needed because SESSION_MODE otherwise reflects whatever the real .env
+    (loaded via load_dotenv() at import time) happens to be set to.
+    """
+    monkeypatch.setattr(matrix_client, "SESSION_MODE", "fresh")
+
+
 def test_run_client_logs_in_and_logs_out(monkeypatch):
+    use_fresh_mode(monkeypatch)
     login_response = LoginResponse(
         user_id="@bot:example.invalid", device_id="ABCDEF", access_token="tok"
     )
@@ -65,6 +75,7 @@ def test_run_client_logs_in_and_logs_out(monkeypatch):
 
 
 def test_run_client_returns_early_on_login_failure(monkeypatch):
+    use_fresh_mode(monkeypatch)
     login_error = LoginError(message="invalid credentials")
     client = fake_client(monkeypatch, login_error)
 
@@ -75,6 +86,7 @@ def test_run_client_returns_early_on_login_failure(monkeypatch):
 
 
 def test_run_client_logout_failure_does_not_block_close(monkeypatch):
+    use_fresh_mode(monkeypatch)
     login_response = LoginResponse(
         user_id="@bot:example.invalid", device_id="ABCDEF", access_token="tok"
     )
