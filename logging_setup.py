@@ -10,14 +10,22 @@ _RESERVED_RECORD_ATTRS = frozenset(
 )
 
 
-def configure_logging(level: str | None = None) -> None:
+def configure_logging(
+    level: str | None = None, external_level: str | None = None
+) -> None:
     """Configure the root logger to emit one JSON object per line on stdout.
 
-    Reads the level from the `LOG_LEVEL` env var (default `INFO`) unless
-    `level` is given explicitly. JSON output is designed to be scraped by
-    Promtail/Grafana Alloy and queried in Grafana via Loki.
+    Reads levels from the `LOG_LEVEL` (default `INFO`) and `EXTERNAL_LOG_LEVEL`
+    (default `WARNING`) env vars unless `level`/`external_level` are given
+    explicitly. `EXTERNAL_LOG_LEVEL` applies to third-party libraries (e.g.
+    nio's own device-tracking/key-claiming/room-handling logs), which are
+    otherwise too chatty at INFO to be useful. JSON output is designed to be
+    scraped by Promtail/Grafana Alloy and queried in Grafana via Loki.
     """
     resolved_level = (level or os.environ.get("LOG_LEVEL", "INFO")).upper()
+    resolved_external_level = (
+        external_level or os.environ.get("EXTERNAL_LOG_LEVEL", "WARNING")
+    ).upper()
 
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(_JsonFormatter())
@@ -26,9 +34,7 @@ def configure_logging(level: str | None = None) -> None:
     root.setLevel(resolved_level)
     root.handlers = [handler]
 
-    # nio's crypto machinery logs routine device-tracking/key-claiming
-    # bookkeeping at INFO, which drowns out the bot's own logs.
-    logging.getLogger("nio.crypto").setLevel(logging.WARNING)
+    logging.getLogger("nio").setLevel(resolved_external_level)
 
 
 class _JsonFormatter(logging.Formatter):

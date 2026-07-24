@@ -66,6 +66,15 @@ A Matrix bot that listens for `!roll` commands and replies with dice roll result
    MAX_DICE_SIDES=100
    ```
 
+   Optionally, override the logging levels (defaults: `INFO` and `WARNING`):
+
+   ```
+   LOG_LEVEL=INFO
+   EXTERNAL_LOG_LEVEL=WARNING
+   ```
+
+   `LOG_LEVEL` controls the bot's own logs; `EXTERNAL_LOG_LEVEL` controls third-party libraries (e.g. nio's device-tracking/key-claiming/room-handling logs, which are noisy at `INFO`).
+
 3. Verify your `.env` is complete:
 
    ```bash
