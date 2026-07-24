@@ -26,6 +26,10 @@ def configure_logging(level: str | None = None) -> None:
     root.setLevel(resolved_level)
     root.handlers = [handler]
 
+    # nio's crypto machinery logs routine device-tracking/key-claiming
+    # bookkeeping at INFO, which drowns out the bot's own logs.
+    logging.getLogger("nio.crypto").setLevel(logging.WARNING)
+
 
 class _JsonFormatter(logging.Formatter):
     """Render a LogRecord as a single-line JSON object."""

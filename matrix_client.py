@@ -61,14 +61,19 @@ async def run_client(message_callback):
         logger.info("Logged in", extra={"user_id": client.user_id})
 
         client.add_event_callback(
-            lambda room, event: message_callback(client, room, event), RoomMessageText
-        )
-        client.add_event_callback(
             lambda room, event: _request_missing_session_key(client, room, event),
             MegolmEvent,
         )
 
+        # Discard backlog: the initial full-state sync catches this device
+        # up on everything that happened while the bot was offline (or ever,
+        # on a fresh session/store). Registering the message callback only
+        # after it completes means we react to new messages, not old ones.
         await client.sync(timeout=30000, full_state=True)
+
+        client.add_event_callback(
+            lambda room, event: message_callback(client, room, event), RoomMessageText
+        )
 
         # Run sync_forever as a background task so we can race it
         # against the shutdown signal instead of blocking on it.
