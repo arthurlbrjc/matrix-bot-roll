@@ -82,6 +82,22 @@ poetry run invoke clean-store  # wipe ./store (encryption keys + sync tokens); p
 
 `clean-store` forces a full re-sync on next run and can break decryption of previously-seen messages — only use it if the store is corrupted or you're resetting the bot's session.
 
+### Skipping the `poetry run` prefix
+
+`invoke` and its task dependencies (e.g. `python-dotenv`) are installed in Poetry's virtualenv, not globally, so a bare `invoke <task>` normally fails to find them. To activate that venv for your current shell and drop the prefix for the rest of the session:
+
+```bash
+eval $(poetry env activate)
+invoke test    # now works without poetry run, for this shell only
+```
+
+Notes:
+
+- This only affects the shell it's run in — other terminals, and new shells, are unaffected.
+- It doesn't spawn a subshell (unlike the older `poetry shell` plugin); it modifies `PATH`/`VIRTUAL_ENV` in place, so if you `cd` into another project in the same shell you'll still be using this project's venv unless you deactivate.
+- To leave the venv, run `deactivate`, or just close the shell.
+- Not useful for non-interactive contexts (CI, Docker, cron) — those should keep using `poetry run <cmd>` explicitly.
+
 ## Local test homeserver
 
 `docker-compose.yml` spins up a local Synapse homeserver and an Element web client, useful for testing the bot without a real Matrix account:
