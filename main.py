@@ -9,6 +9,7 @@ from formatting import format_roll_results, markdown_to_html
 from health_check import serve_health_check
 from logging_setup import configure_logging
 from matrix_client import run_client
+from messages import NO_PREVIOUS_ROLL, ROLL_HELP, USAGE
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -44,39 +45,24 @@ async def message_callback(
 
 
 def _handle_roll(room_id: str, body: str) -> str:
-    """Handle a `!roll <expression> [| message]` message, remembering the expression for `!reroll`."""
+    """Handle `!roll`: bare usage, `--help` for detailed syntax, or an expression to roll and remember for `!reroll`."""
     parts = body.split(maxsplit=1)
     if len(parts) < 2:
-        return "\n".join(
-            [
-                "**Usage: !roll <expression> [expression ...] [| message]**",
-                "",
-                "• `!roll d20` — roll one die",
-                "• `!roll 4d6` — roll multiple dice",
-                "• `!roll 2d6+4` — add +/- modifiers",
-                "• `!roll 4d6kh3`, `!roll 4d6kl3` — keep highest/lowest dice",
-                "• `!roll 2d20adv`, `!roll 2d20dis` — advantage/disadvantage "
-                "(add one die then keep X highest/lowest)",
-                "• `!roll 4(d10+2)`, `!roll 4(d10+2)kh1`, `!roll 2(d20+3)adv` "
-                "— per-die modifier and adv/dis/kh/kl",
-                "• `!roll 2d6kh1+4 3(d10-2)adv` — combine everything",
-                "• `!roll 3d8+4 | attack` — attach a message to the roll",
-                "• `!reroll` — repeat the last `!roll` expression in this room",
-            ]
-        )
+        return USAGE
 
-    expr = parts[1].strip()
-    _last_rolls[room_id] = expr
-    return _roll_and_format(expr)
+    arg = parts[1].strip()
+    if arg == "--help":
+        return ROLL_HELP
+
+    _last_rolls[room_id] = arg
+    return _roll_and_format(arg)
 
 
 def _handle_reroll(room_id: str) -> str:
     """Handle a `!reroll` message by re-running the last `!roll` expression in this room."""
     expr = _last_rolls.get(room_id)
     if expr is None:
-        return (
-            "No previous roll to repeat in this room — use `!roll <expression>` first."
-        )
+        return NO_PREVIOUS_ROLL
     return _roll_and_format(expr)
 
 
