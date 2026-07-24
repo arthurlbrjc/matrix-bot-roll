@@ -1,4 +1,10 @@
+import os
 import re
+
+# Sanity limits on dice count/sides to prevent abuse; overridable via env for
+# deployments that want stricter or looser bounds.
+MAX_DICE_COUNT = int(os.environ.get("MAX_DICE_COUNT", 100))
+MAX_DICE_SIDES = int(os.environ.get("MAX_DICE_SIDES", 100))
 
 # Matches things like: 1d20, 2d6+4, d8, 3d10-2, 2d20kh1, 4d6kl3, 2d20adv, 2d20dis
 DICE_WITH_TOTAL_MODIFIER_RE = re.compile(

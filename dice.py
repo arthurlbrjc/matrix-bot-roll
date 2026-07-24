@@ -2,7 +2,12 @@ import random
 import re
 from typing import Callable, List, Optional, Set, Tuple
 
-from constants import DICE_WITH_DIE_MODIFIER_RE, DICE_WITH_TOTAL_MODIFIER_RE
+from constants import (
+    DICE_WITH_DIE_MODIFIER_RE,
+    DICE_WITH_TOTAL_MODIFIER_RE,
+    MAX_DICE_COUNT,
+    MAX_DICE_SIDES,
+)
 from models import Die, RollResult
 from typevars import T
 
@@ -127,7 +132,7 @@ def _validate(
 
 def _in_bounds(count: int, sides: int) -> bool:
     """Sanity limits so nobody rolls 999999d999999 and hangs the bot."""
-    return 1 <= count <= 100 and 2 <= sides <= 1000
+    return 1 <= count <= MAX_DICE_COUNT and 2 <= sides <= MAX_DICE_SIDES
 
 
 def _resolve_keep(

@@ -16,7 +16,7 @@ A Matrix bot that listens for `!roll` commands and replies with dice roll result
 - `!roll 4(d10+2)kh1` / `!roll 2(d20+3)adv` — group modifiers also combine with `kh`/`kl`/`adv`/`dis`, keeping among the modified values
 - `!reroll` — repeat the last `!roll` expression sent in the room
 - Auto-joins any room it's invited to
-- Sanity limits on dice count (1–100) and sides (2–1000) to prevent abuse
+- Sanity limits on dice count (1–100) and sides (2–100) to prevent abuse, overridable via `MAX_DICE_COUNT`/`MAX_DICE_SIDES`
 - Replies as both plain text and formatted HTML
 
 ## Requirements
@@ -41,6 +41,13 @@ A Matrix bot that listens for `!roll` commands and replies with dice roll result
    MATRIX_ACCESS_TOKEN=your-access-token
    MATRIX_DEVICE_ID=your-device-id
    MATRIX_STORE_PATH=./store
+   ```
+
+   Optionally, override the dice sanity limits (defaults: 100 and 100):
+
+   ```
+   MAX_DICE_COUNT=100
+   MAX_DICE_SIDES=100
    ```
 
 3. Verify your `.env` is complete:

@@ -106,7 +106,7 @@ class TestRollDicePlain:
             "0d6",  # count < 1
             "1d1",  # sides < 2
             "101d6",  # count > 100
-            "1d1001",  # sides > 1000
+            "1d101",  # sides > 100
             "2d20kh5",  # keep_n > count
             "2d20kh0",  # keep_n < 1
         ],
@@ -155,7 +155,7 @@ class TestRollDiceGroup:
             "0(d6+1)",  # count < 1
             "101(d6+1)",  # count > 100
             "2(d1+1)",  # sides < 2
-            "2(d1001+1)",  # sides > 1000
+            "2(d101+1)",  # sides > 100
         ],
     )
     def test_invalid_group_expressions_return_none(self, expr):
