@@ -5,11 +5,14 @@ from typing import List, Optional, Tuple
 from models import Die, RollResult
 
 
-def format_roll_results(results: List[Tuple[str, Optional[RollResult]]]) -> str:
+def format_roll_results(
+    results: List[Tuple[str, Optional[RollResult]]], message: Optional[str] = None
+) -> str:
     """
     Turn roll() output into a human-readable string.
     Invalid expressions are flagged; valid ones show total + detail.
-    Also appends a grand total across all valid rolls if there's more than one.
+    Also appends a grand total across all valid rolls if there's more than one,
+    and the optional `message` attached to the roll, if any.
     """
     lines = []
     grand_total = 0
@@ -32,6 +35,9 @@ def format_roll_results(results: List[Tuple[str, Optional[RollResult]]]) -> str:
 
     if valid_count > 1:
         lines.append(f"**Total: {grand_total}**")
+
+    if message:
+        lines.append(f"💬 {message}")
 
     return "\n".join(lines)
 

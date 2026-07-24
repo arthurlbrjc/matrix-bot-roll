@@ -44,12 +44,12 @@ async def message_callback(
 
 
 def _handle_roll(room_id: str, body: str) -> str:
-    """Handle a `!roll <expression>` message, remembering the expression for `!reroll`."""
+    """Handle a `!roll <expression> [| message]` message, remembering the expression for `!reroll`."""
     parts = body.split(maxsplit=1)
     if len(parts) < 2:
         return "\n".join(
             [
-                "**Usage: !roll <expression> [expression ...]**",
+                "**Usage: !roll <expression> [expression ...] [| message]**",
                 "",
                 "• `!roll d20` — roll one die",
                 "• `!roll 4d6` — roll multiple dice",
@@ -60,13 +60,14 @@ def _handle_roll(room_id: str, body: str) -> str:
                 "• `!roll 4(d10+2)`, `!roll 4(d10+2)kh1`, `!roll 2(d20+3)adv` "
                 "— per-die modifier and adv/dis/kh/kl",
                 "• `!roll 2d6kh1+4 3(d10-2)adv` — combine everything",
+                "• `!roll 3d8+4 | attack` — attach a message to the roll",
                 "• `!reroll` — repeat the last `!roll` expression in this room",
             ]
         )
 
     expr = parts[1].strip()
     _last_rolls[room_id] = expr
-    return format_roll_results(roll(expr))
+    return _roll_and_format(expr)
 
 
 def _handle_reroll(room_id: str) -> str:
@@ -76,7 +77,13 @@ def _handle_reroll(room_id: str) -> str:
         return (
             "No previous roll to repeat in this room — use `!roll <expression>` first."
         )
-    return format_roll_results(roll(expr))
+    return _roll_and_format(expr)
+
+
+def _roll_and_format(expr: str) -> str:
+    """Split `expr` into dice expressions and an optional `| message` suffix, roll, and format."""
+    dice_part, _, message = expr.partition("|")
+    return format_roll_results(roll(dice_part.strip()), message.strip() or None)
 
 
 async def main():

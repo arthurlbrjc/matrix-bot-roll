@@ -14,7 +14,8 @@ A Matrix bot that listens for `!roll` commands and replies with dice roll result
 - `!roll 2d20adv` / `!roll 2d20dis` — advantage/disadvantage: roll one extra die, then keep the best/worst 2 of the 3
 - `!roll 4(d10+2)` — group modifier: apply `+2` to each of the 4 dice individually, instead of once to the total
 - `!roll 4(d10+2)kh1` / `!roll 2(d20+3)adv` — group modifiers also combine with `kh`/`kl`/`adv`/`dis`, keeping among the modified values
-- `!reroll` — repeat the last `!roll` expression sent in the room
+- `!roll 3d8+4 | attack` — attach an optional message to the roll, shown alongside the result
+- `!reroll` — repeat the last `!roll` expression sent in the room (message included)
 - Auto-joins any room it's invited to
 - Sanity limits on dice count (1–100) and sides (2–100) to prevent abuse, overridable via `MAX_DICE_COUNT`/`MAX_DICE_SIDES`
 - Replies as both plain text and formatted HTML
@@ -81,6 +82,7 @@ In a room the bot has joined:
 !roll 1d20dis
 !roll 4(d10+2)
 !roll 4(d10+2)kh1
+!roll 3d8+4 | attack
 !reroll
 ```
 
