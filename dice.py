@@ -154,7 +154,7 @@ def _resolve_keep(
         keep_mode, keep_n = keep_str[1], int(keep_str[2:])
         adv_dis = None
 
-    if count > 100 or keep_n < 1 or keep_n > count:
+    if keep_n < 1 or keep_n > count:
         return None
 
     return keep_mode, keep_n, adv_dis, count
