@@ -4,12 +4,12 @@ import os
 
 from nio import AsyncClient, MatrixRoom, RoomMessageText
 
-from dice import roll
-from formatting import format_roll_results, markdown_to_html
-from health_check import serve_health_check
-from logging_setup import configure_logging
-from matrix_client import run_client
-from messages import NO_PREVIOUS_ROLL, ROLL_HELP, USAGE
+from matrix_bot_roll.dice import roll
+from matrix_bot_roll.formatting import format_roll_results, markdown_to_html
+from matrix_bot_roll.health_check import serve_health_check
+from matrix_bot_roll.logging_setup import configure_logging
+from matrix_bot_roll.matrix_client import run_client
+from matrix_bot_roll.messages import NO_PREVIOUS_ROLL, ROLL_HELP, USAGE
 
 configure_logging()
 logger = logging.getLogger(__name__)

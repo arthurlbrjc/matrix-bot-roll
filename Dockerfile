@@ -15,6 +15,8 @@ RUN poetry config virtualenvs.create false \
 
 COPY . .
 
+ENV PYTHONPATH=/app/src
+
 RUN useradd --create-home bot \
     && mkdir -p /app/store \
     && chown -R bot:bot /app
@@ -24,4 +26,4 @@ VOLUME ["/app/store"]
 
 EXPOSE 8080
 
-CMD ["python", "main.py"]
+CMD ["python", "-m", "matrix_bot_roll.main"]

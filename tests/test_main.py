@@ -8,8 +8,8 @@ os.environ.setdefault("MATRIX_PASSWORD", "unused-test-password")
 os.environ.setdefault("MATRIX_DEVICE_NAME", "matrix-bot-roll-test")
 os.environ.setdefault("MATRIX_STORE_PATH", "/tmp/matrix-bot-roll-test-store")
 
-from main import _handle_reroll, _handle_roll  # noqa: E402
-from messages import NO_PREVIOUS_ROLL, ROLL_HELP, USAGE  # noqa: E402
+from matrix_bot_roll.main import _handle_reroll, _handle_roll  # noqa: E402
+from matrix_bot_roll.messages import NO_PREVIOUS_ROLL, ROLL_HELP, USAGE  # noqa: E402
 
 
 class TestHandleRoll:

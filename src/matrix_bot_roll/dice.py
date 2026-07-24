@@ -2,14 +2,14 @@ import random
 import re
 from typing import Callable, List, Optional, Set, Tuple
 
-from constants import (
+from matrix_bot_roll.constants import (
     DICE_WITH_DIE_MODIFIER_RE,
     DICE_WITH_TOTAL_MODIFIER_RE,
     MAX_DICE_COUNT,
     MAX_DICE_SIDES,
 )
-from models import Die, RollResult
-from typevars import T
+from matrix_bot_roll.models import Die, RollResult
+from matrix_bot_roll.typevars import T
 
 
 def roll(input_str: str) -> List[Tuple[str, Optional[RollResult]]]:

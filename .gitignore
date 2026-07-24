@@ -7,6 +7,6 @@
 
 .idea
 .env
-synapse-data/
-store*
+dev/synapse-data/
+dev/store*
 __pycache__/

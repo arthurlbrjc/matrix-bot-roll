@@ -2,7 +2,7 @@
 
 import pytest
 
-import dice
+from matrix_bot_roll import dice
 
 
 def fixed_rolls(monkeypatch, values):

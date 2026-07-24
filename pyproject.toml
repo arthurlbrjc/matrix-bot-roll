@@ -25,7 +25,7 @@ build-backend = "poetry.core.masonry.api"
 target-version = ["py314"]
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
+pythonpath = ["src"]
 
 [tool.mypy]
 exclude = ["(^|/)\\.venv/"]

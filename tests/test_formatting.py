@@ -1,8 +1,7 @@
 """Unit tests for the result formatting logic in formatting.py."""
 
-from models import Die, RollResult
-
-from formatting import format_roll_results
+from matrix_bot_roll.formatting import format_roll_results
+from matrix_bot_roll.models import Die, RollResult
 
 
 def _result(total: int = 4) -> RollResult:

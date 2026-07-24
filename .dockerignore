@@ -4,9 +4,6 @@
 .mypy_cache
 .pytest_cache
 __pycache__
-store
-synapse-data
+dev
 .env
-docker-compose.yml
-element-config.json
 tests

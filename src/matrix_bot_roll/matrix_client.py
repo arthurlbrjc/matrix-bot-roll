@@ -8,7 +8,7 @@ from nio import AsyncClient, AsyncClientConfig, MatrixRoom, MegolmEvent, RoomMes
 from nio.exceptions import LocalProtocolError
 from nio.responses import LoginResponse, WhoamiResponse
 
-from session_store import SavedSession, load_session, save_session
+from matrix_bot_roll.session_store import SavedSession, load_session, save_session
 
 load_dotenv()
 

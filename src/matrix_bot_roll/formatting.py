@@ -2,7 +2,7 @@ import html
 import re
 from typing import List, Optional, Tuple
 
-from models import Die, RollResult
+from matrix_bot_roll.models import Die, RollResult
 
 
 def format_roll_results(

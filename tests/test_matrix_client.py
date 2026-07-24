@@ -17,8 +17,8 @@ from nio.responses import (  # noqa: E402
     WhoamiResponse,
 )
 
-import matrix_client  # noqa: E402
-from session_store import SavedSession  # noqa: E402
+from matrix_bot_roll import matrix_client  # noqa: E402
+from matrix_bot_roll.session_store import SavedSession  # noqa: E402
 
 
 def fake_client(monkeypatch, login_response):

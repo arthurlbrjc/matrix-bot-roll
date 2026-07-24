@@ -14,7 +14,7 @@ import shutil
 
 from invoke import task
 
-BOT_SCRIPT = "main.py"
+BOT_MODULE = "matrix_bot_roll.main"
 
 
 @task
@@ -44,7 +44,7 @@ def env_check(c):
 @task(pre=[env_check])
 def run(c):
     """Run the bot."""
-    c.run(f"poetry run python {BOT_SCRIPT}", pty=True)
+    c.run(f"poetry run python -m {BOT_MODULE}", pty=True, env={"PYTHONPATH": "src"})
 
 
 @task(pre=[env_check])
@@ -52,10 +52,11 @@ def watch(c):
     """Run the bot, auto-restarting on .py and .env changes."""
     c.run(
         "poetry run watchfiles "
-        f"'poetry run python {BOT_SCRIPT}' "
+        f"'poetry run python -m {BOT_MODULE}' "
         "--filter python "
-        ".",
+        "src",
         pty=True,
+        env={"PYTHONPATH": "src"},
     )
 
 

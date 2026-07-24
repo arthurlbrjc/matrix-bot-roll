@@ -59,7 +59,7 @@ poetry run invoke watch         # run the bot, auto-restarting on .py/.env chang
 Or run directly without invoke:
 
 ```bash
-poetry run python main.py
+PYTHONPATH=src poetry run python -m matrix_bot_roll.main
 ```
 
 In a room the bot has joined:
@@ -77,7 +77,7 @@ poetry run invoke check        # format with black, lint with flake8, type-check
 poetry run invoke ci-check     # verify formatting/lint/types without modifying files (used in CI)
 poetry run invoke test         # run the test suite
 poetry run invoke clean        # remove __pycache__, caches, build artifacts
-poetry run invoke clean-store  # wipe ./store (encryption keys + sync tokens); prompts for confirmation
+poetry run invoke clean-store  # wipe ./dev/store (encryption keys + sync tokens); prompts for confirmation
 ```
 
 `clean-store` forces a full re-sync on next run and can break decryption of previously-seen messages — only use it if the store is corrupted or you're resetting the bot's session.
@@ -100,10 +100,10 @@ Notes:
 
 ## Local test homeserver
 
-`docker-compose.yml` spins up a local Synapse homeserver and an Element web client, useful for testing the bot without a real Matrix account:
+`dev/docker-compose.yml` spins up a local Synapse homeserver and an Element web client, useful for testing the bot without a real Matrix account:
 
 ```bash
-docker compose up
+docker compose -f dev/docker-compose.yml up
 ```
 
 - Synapse: http://localhost:8008
