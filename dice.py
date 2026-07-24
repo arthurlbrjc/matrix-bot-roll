@@ -131,7 +131,12 @@ def _validate(
 
 
 def _in_bounds(count: int, sides: int) -> bool:
-    """Sanity limits so nobody rolls 999999d999999 and hangs the bot."""
+    """
+    Sanity limits so nobody rolls 999999d999999 and hangs the bot.
+
+    Checked against the requested count only — adv/dis are allowed to add one
+    extra die on top of MAX_DICE_COUNT (see `_resolve_keep`) by design.
+    """
     return 1 <= count <= MAX_DICE_COUNT and 2 <= sides <= MAX_DICE_SIDES
 
 

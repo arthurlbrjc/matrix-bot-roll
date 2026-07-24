@@ -151,11 +151,15 @@ def pingtest(c):
         "release": "Target release, must be a valid semver string or a valid bump rule. Default to patch"
     }
 )
-def bumpversion(ctx, release="patch"):
+def version(ctx, release="patch"):
     """
-    Bump package version
+    Bump package version and create commit with corresponding tag
     """
-    ctx.run(f"poetry version {release}")
+    bumpversion(ctx, release)
+    new_version = ctx.run("poetry version -s", hide="out").stdout.strip()
+    ctx.run("git add --all")
+    ctx.run(f"git commit --message='v{new_version}'")
+    ctx.run(f"git tag --annotate 'v{new_version}' --message='v{new_version}'")
 
 
 @task(
@@ -163,12 +167,8 @@ def bumpversion(ctx, release="patch"):
         "release": "Target release, must be a valid semver string or a valid bump rule. Default to patch"
     }
 )
-def version(ctx, release="patch"):
+def bumpversion(ctx, release="patch"):
     """
-    Bump package version and create commit with corresponding tag
+    Bump package version
     """
-    bumpversion(ctx, release)  # TODO how to pass `release` parameter to pre-task ?
-    new_version = ctx.run("poetry version -s", hide="out").stdout.strip()
-    ctx.run("git add --all")
-    ctx.run(f"git commit --message='v{new_version}'")
-    ctx.run(f"git tag --annotate 'v{new_version}' --message='v{new_version}'")
+    ctx.run(f"poetry version {release}")

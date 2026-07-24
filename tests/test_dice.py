@@ -99,6 +99,13 @@ class TestRollDicePlain:
         assert result.adv_dis == "disadvantage"
         assert result.crit == "fumble"
 
+    def test_advantage_at_max_count_allows_one_extra_die(self, monkeypatch):
+        """adv/dis are allowed to exceed MAX_DICE_COUNT by one die, by design."""
+        fixed_rolls(monkeypatch, [3] * 101)
+        result = dice._roll_dice("100d6adv")
+        assert result is not None
+        assert len(result.dice) == 101
+
     @pytest.mark.parametrize(
         "expr",
         [
