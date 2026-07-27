@@ -62,11 +62,71 @@ jobs:
           SCW_SECRET_KEY: ${{ secrets.SCW_SECRET_KEY }}
           SCW_DEFAULT_PROJECT_ID: ${{ secrets.SCW_DEFAULT_PROJECT_ID }}
         run: |
+          api_base="https://api.scaleway.com/containers/v1/regions/fr-par/containers"
+          container_name="matrix-bot-roll"
+
           container_id=$(curl -sS \
             -H "X-Auth-Token: ${SCW_SECRET_KEY}" \
-            "https://api.scaleway.com/containers/v1beta1/regions/fr-par/containers?name=matrix-bot-roll&project_id=${SCW_DEFAULT_PROJECT_ID}" \
+            "${api_base}?name=${container_name}&project_id=${SCW_DEFAULT_PROJECT_ID}" \
             | jq -r '.containers[0].id')
 
-          curl -sS -X POST \
+          if [ -z "${container_id}" ] || [ "${container_id}" = "null" ]; then
+            echo "No container named ${container_name} found in project ${SCW_DEFAULT_PROJECT_ID}, aborting deploy." >&2
+            exit 1
+          fi
+
+          # A deploy triggered while the container is still transitioning from a
+          # previous one (e.g. two pushes in quick succession) gets rejected with
+          # 409 "resource is in a transient state", so wait for it to settle first.
+          # Poll with exponential backoff (capped) to cover several minutes of
+          # transition time without hammering the API with fixed-interval calls.
+          max_attempts=10
+          delay=3
+          max_delay=60
+          for attempt in $(seq 1 "${max_attempts}"); do
+            status=$(curl -sS \
+              -H "X-Auth-Token: ${SCW_SECRET_KEY}" \
+              "${api_base}/${container_id}" \
+              | jq -r '.status')
+
+            if [ "${status}" = "ready" ]; then
+              break
+            fi
+            if [ "${status}" = "error" ]; then
+              echo "Container ${container_id} is in error state, aborting deploy." >&2
+              exit 1
+            fi
+
+            if [ "${attempt}" = "${max_attempts}" ]; then
+              break
+            fi
+            echo "Container status is '${status}', waiting ${delay}s before checking again (attempt ${attempt}/${max_attempts})..."
+            sleep "${delay}"
+            delay=$((delay * 2))
+            if [ "${delay}" -gt "${max_delay}" ]; then
+              delay="${max_delay}"
+            fi
+          done
+
+          if [ "${status}" != "ready" ]; then
+            echo "Container ${container_id} never reached 'ready' status, aborting deploy." >&2
+            exit 1
+          fi
+
+          http_code=$(curl -sS -o /tmp/deploy_response.json -w "%{http_code}" -X POST \
             -H "X-Auth-Token: ${SCW_SECRET_KEY}" \
-            "https://api.scaleway.com/containers/v1beta1/regions/fr-par/containers/${container_id}/deploy"
+            "${api_base}/${container_id}/redeploy")
+
+          if [ "${http_code}" = "409" ]; then
+            echo "Deploy rejected with 409 (transient state) despite waiting for 'ready'; retrying once after a delay."
+            sleep 10
+            http_code=$(curl -sS -o /tmp/deploy_response.json -w "%{http_code}" -X POST \
+              -H "X-Auth-Token: ${SCW_SECRET_KEY}" \
+              "${api_base}/${container_id}/redeploy")
+          fi
+
+          cat /tmp/deploy_response.json
+          if [ "${http_code}" -ge 300 ]; then
+            echo "Deploy request failed with HTTP ${http_code}" >&2
+            exit 1
+          fi
