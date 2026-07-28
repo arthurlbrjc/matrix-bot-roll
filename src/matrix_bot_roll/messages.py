@@ -2,15 +2,15 @@
 
 USAGE = "\n".join(
     [
-        "• `!roll <expression> [expression ...] [| message]` — roll dice",
+        "• `!roll <expression> [expression ...] [| message]` (or `!r`) — roll dice",
         "• `!roll --help` — detailed roll syntax and examples",
-        "• `!reroll` — repeat the last `!roll` expression in this room",
+        "• `!reroll` (or `!rr`) — repeat the last `!roll` expression in this room",
     ]
 )
 
 ROLL_HELP = "\n".join(
     [
-        "**!roll <expression> [expression ...] [| message]**",
+        "**!roll <expression> [expression ...] [| message]** (alias: `!r`)",
         "",
         "• `!roll d20` — roll one die",
         "• `!roll 4d6` — roll multiple dice",

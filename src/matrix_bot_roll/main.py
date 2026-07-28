@@ -22,9 +22,10 @@ async def message_callback(
     client: AsyncClient, room: MatrixRoom, event: RoomMessageText
 ):
     body = event.body.strip()
-    if body.startswith("!reroll"):
+    command = body.split(maxsplit=1)[0] if body else ""
+    if command in ("!reroll", "!rr"):
         reply = _handle_reroll(room.room_id)
-    elif body.startswith("!roll"):
+    elif command in ("!roll", "!r"):
         reply = _handle_roll(room.room_id, body)
     else:
         return
@@ -45,7 +46,7 @@ async def message_callback(
 
 
 def _handle_roll(room_id: str, body: str) -> str:
-    """Handle `!roll`: bare usage, `--help` for detailed syntax, or an expression to roll and remember for `!reroll`."""
+    """Handle `!roll`/`!r`: bare usage, `--help` for detailed syntax, or an expression to roll and remember for `!reroll`."""
     parts = body.split(maxsplit=1)
     if len(parts) < 2:
         return USAGE
@@ -59,7 +60,7 @@ def _handle_roll(room_id: str, body: str) -> str:
 
 
 def _handle_reroll(room_id: str) -> str:
-    """Handle a `!reroll` message by re-running the last `!roll` expression in this room."""
+    """Handle a `!reroll`/`!rr` message by re-running the last `!roll` expression in this room."""
     expr = _last_rolls.get(room_id)
     if expr is None:
         return NO_PREVIOUS_ROLL
