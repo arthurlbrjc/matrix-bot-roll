@@ -28,3 +28,5 @@ ROLL_HELP = "\n".join(
 NO_PREVIOUS_ROLL = (
     "No previous roll to repeat in this room — use `!roll <expression>` first."
 )
+
+INVALID_ROLL = "Invalid roll expression — see `!roll --help` for syntax."

@@ -4,18 +4,17 @@ import os
 
 from nio import AsyncClient, MatrixRoom, RoomMessageText
 
-from matrix_bot_roll.dice import roll
-from matrix_bot_roll.formatting import format_roll_results, markdown_to_html
+from matrix_bot_roll.command_handler import handle
+from matrix_bot_roll.commands import build_command
+from matrix_bot_roll.formatting import format_detail, markdown_to_html
 from matrix_bot_roll.health_check import serve_health_check
 from matrix_bot_roll.logging_setup import configure_logging
 from matrix_bot_roll.matrix_client import run_client
-from matrix_bot_roll.messages import NO_PREVIOUS_ROLL, ROLL_HELP, USAGE
+from matrix_bot_roll.models import DiceRollResult, RollResult
 
 configure_logging()
 logger = logging.getLogger(__name__)
 logger.info("Starting bot", extra={"pid": os.getpid()})
-
-_last_rolls: dict[str, str] = {}
 
 
 async def message_callback(
@@ -23,12 +22,11 @@ async def message_callback(
 ):
     body = event.body.strip()
     command = body.split(maxsplit=1)[0] if body else ""
-    if command in ("!reroll", "!rr"):
-        reply = _handle_reroll(room.room_id)
-    elif command in ("!roll", "!r"):
-        reply = _handle_roll(room.room_id, body)
-    else:
+    if command not in ("!roll", "!r", "!reroll", "!rr"):
         return
+
+    parsed = build_command(room.room_id, body)
+    reply = parsed if isinstance(parsed, str) else _format_result(handle(parsed))
 
     content = {
         "msgtype": "m.text",
@@ -45,32 +43,32 @@ async def message_callback(
     )
 
 
-def _handle_roll(room_id: str, body: str) -> str:
-    """Handle `!roll`/`!r`: bare usage, `--help` for detailed syntax, or an expression to roll and remember for `!reroll`."""
-    parts = body.split(maxsplit=1)
-    if len(parts) < 2:
-        return USAGE
+def _format_result(result: RollResult) -> str:
+    """
+    Turn a RollResult into a human-readable string.
 
-    arg = parts[1].strip()
-    if arg == "--help":
-        return ROLL_HELP
+    Also appends a grand total across all rolls if there's more than one, and
+    the optional `message` attached to the roll, if any.
+    """
+    lines = [_format_roll_line(expr, roll) for expr, roll in result.rolls]
 
-    _last_rolls[room_id] = arg
-    return _roll_and_format(arg)
+    if len(result.rolls) > 1:
+        lines.append(f"**Total: {result.total}**")
 
+    if result.message:
+        lines.append(f"💬 {result.message}")
 
-def _handle_reroll(room_id: str) -> str:
-    """Handle a `!reroll`/`!rr` message by re-running the last `!roll` expression in this room."""
-    expr = _last_rolls.get(room_id)
-    if expr is None:
-        return NO_PREVIOUS_ROLL
-    return _roll_and_format(expr)
+    return "\n".join(lines)
 
 
-def _roll_and_format(expr: str) -> str:
-    """Split `expr` into dice expressions and an optional `| message` suffix, roll, and format."""
-    dice_part, _, message = expr.partition("|")
-    return format_roll_results(roll(dice_part.strip()), message.strip() or None)
+def _format_roll_line(expr: str, roll: DiceRollResult) -> str:
+    """Render one '🎲 expr → detail = **total**' line, with a crit/fumble suffix if applicable."""
+    suffix = (
+        " 🎯 CRIT!"
+        if roll.crit == "crit"
+        else " 💥 FUMBLE!" if roll.crit == "fumble" else ""
+    )
+    return f"🎲 {expr} → {format_detail(roll)} = **{roll.total}**{suffix}"
 
 
 async def main():

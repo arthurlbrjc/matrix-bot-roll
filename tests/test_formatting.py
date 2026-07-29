@@ -1,44 +1,84 @@
-"""Unit tests for the result formatting logic in formatting.py."""
+"""Unit tests for the shared formatting helpers in formatting.py."""
 
-from matrix_bot_roll.formatting import format_roll_results
-from matrix_bot_roll.models import Die, RollResult
+from dataclasses import replace
+
+from matrix_bot_roll.formatting import _mark, format_detail, markdown_to_html
+from matrix_bot_roll.models import Die, DiceRollResult
 
 
-def _result(total: int = 4) -> RollResult:
-    """A minimal valid RollResult for a '1d6' style roll."""
-    return RollResult(
-        total=total,
-        dice=[Die(raw=total, value=total, kept=True)],
+def _result(**overrides) -> DiceRollResult:
+    """A minimal valid DiceRollResult for a '1d6' style roll, with overridable fields."""
+    base = DiceRollResult(
+        total=4,
+        dice=[Die(raw=4, value=4, kept=True)],
         sides=6,
         modifier=0,
-        modifier_mode=None,
+        modifier_mode="total",
         keep_mode=None,
         keep_n=None,
         adv_dis=None,
         crit=None,
     )
+    return replace(base, **overrides)
 
 
-class TestFormatRollResultsMessage:
-    def test_no_message_by_default(self):
-        output = format_roll_results([("1d6", _result())])
-        assert "💬" not in output
+class TestMarkdownToHtml:
+    def test_bold_is_converted(self):
+        assert markdown_to_html("**bold**") == "<b>bold</b>"
 
-    def test_message_is_appended(self):
-        output = format_roll_results([("1d6", _result())], "attack")
-        assert output.endswith("💬 attack")
+    def test_code_is_converted(self):
+        assert markdown_to_html("`code`") == "<code>code</code>"
 
-    def test_empty_message_is_omitted(self):
-        output = format_roll_results([("1d6", _result())], "")
-        assert "💬" not in output
+    def test_crit_total_is_colored_green(self):
+        output = markdown_to_html("🎲 1d6 → [6] = **6** 🎯 CRIT!")
+        assert '<font color="green">6 CRIT!</font>' in output
 
-    def test_message_with_special_characters(self):
-        output = format_roll_results(
-            [("1d6", _result())], "attack <vs> AC 15 & *sneak*"
-        )
-        assert output.endswith("💬 attack <vs> AC 15 & *sneak*")
+    def test_fumble_total_is_colored_red(self):
+        output = markdown_to_html("🎲 1d6 → [1] = **1** 💥 FUMBLE!")
+        assert '<font color="red">1 FUMBLE!</font>' in output
 
-    def test_message_shown_even_for_invalid_expression(self):
-        output = format_roll_results([("abc", None)], "attack")
-        assert "invalid expression" in output
-        assert output.endswith("💬 attack")
+
+class TestMark:
+    def test_max_face_is_marked_with_target(self):
+        assert _mark(6, 6) == "6🎯"
+
+    def test_min_face_is_marked_with_bomb(self):
+        assert _mark(1, 6) == "1💥"
+
+    def test_other_face_is_unmarked(self):
+        assert _mark(3, 6) == "3"
+
+
+class TestFormatDetail:
+    def test_plain_roll_has_no_modifier_suffix(self):
+        assert format_detail(_result()) == "[4]"
+
+    def test_total_modifier_is_appended(self):
+        result = _result(modifier=4, modifier_mode="total")
+        assert format_detail(result) == "[4] +4"
+
+    def test_negative_total_modifier_is_appended(self):
+        result = _result(modifier=-2, modifier_mode="total")
+        assert format_detail(result) == "[4] -2"
+
+    def test_keep_highest_shows_kept_dice(self):
+        dice = [
+            Die(raw=1, value=1, kept=False),
+            Die(raw=4, value=4, kept=True),
+            Die(raw=6, value=6, kept=True),
+        ]
+        result = _result(dice=dice, keep_mode="highest", keep_n=2)
+        assert format_detail(result) == "[1💥, 4, 6🎯] keep highest 2 → [4, 6🎯]"
+
+    def test_advantage_shows_advantage_label(self):
+        dice = [
+            Die(raw=15, value=15, kept=False),
+            Die(raw=20, value=20, kept=True),
+        ]
+        result = _result(dice=dice, sides=20, adv_dis="advantage")
+        assert format_detail(result) == "[15, 20🎯] with advantage → [20🎯]"
+
+    def test_per_die_modifier_shows_computed_values(self):
+        dice = [Die(raw=8, value=10, kept=True)]
+        result = _result(dice=dice, modifier=2, modifier_mode="per_die")
+        assert format_detail(result) == "[8+2=**10**]"

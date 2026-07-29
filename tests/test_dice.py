@@ -1,8 +1,7 @@
 """Unit tests for the dice rolling logic in dice.py."""
 
-import pytest
-
 from matrix_bot_roll import dice
+from matrix_bot_roll.models import DiceSpec
 
 
 def fixed_rolls(monkeypatch, values):
@@ -25,23 +24,60 @@ def kept_raws(result):
     return [d.raw for d in result.dice if d.kept]
 
 
-class TestRollDicePlain:
+def total_spec(
+    count=1,
+    sides=6,
+    modifier=0,
+    modifier_mode="total",
+    keep_mode=None,
+    keep_n=None,
+    adv_dis=None,
+):
+    """A `DiceSpec` for the plain/total-modifier syntax (e.g. '2d6+4')."""
+    return DiceSpec(
+        count=count,
+        sides=sides,
+        modifier=modifier,
+        modifier_mode=modifier_mode,
+        keep_mode=keep_mode,
+        keep_n=keep_n,
+        adv_dis=adv_dis,
+    )
+
+
+def die_modifier_spec(
+    count,
+    sides,
+    modifier,
+    keep_mode=None,
+    keep_n=None,
+    adv_dis=None,
+):
+    """A `DiceSpec` for the per-die-modifier syntax (e.g. '4(d10+2)')."""
+    return DiceSpec(
+        count=count,
+        sides=sides,
+        modifier=modifier,
+        modifier_mode="per_die",
+        keep_mode=keep_mode,
+        keep_n=keep_n,
+        adv_dis=adv_dis,
+    )
+
+
+class TestRollSpecTotalModifier:
     def test_simple_roll(self, monkeypatch):
         fixed_rolls(monkeypatch, [4])
-        result = dice._roll_dice("1d6")
+        result = dice.roll_spec(total_spec(count=1, sides=6))
         assert result.total == 4
         assert raws(result) == [4]
         assert result.crit is None
 
-    def test_default_count_is_one(self, monkeypatch):
-        fixed_rolls(monkeypatch, [5])
-        result = dice._roll_dice("d8")
-        assert result.total == 5
-        assert result.crit is None
-
     def test_positive_modifier(self, monkeypatch):
         fixed_rolls(monkeypatch, [3, 5])
-        result = dice._roll_dice("2d6+4")
+        result = dice.roll_spec(
+            total_spec(count=2, sides=6, modifier=4, modifier_mode="total")
+        )
         assert result.total == 12
         assert raws(result) == [3, 5]
         assert result.modifier == 4
@@ -50,51 +86,67 @@ class TestRollDicePlain:
 
     def test_negative_modifier(self, monkeypatch):
         fixed_rolls(monkeypatch, [3, 5])
-        result = dice._roll_dice("2d6-2")
+        result = dice.roll_spec(
+            total_spec(count=2, sides=6, modifier=-2, modifier_mode="total")
+        )
         assert result.total == 6
         assert result.modifier == -2
 
     def test_result_clamped_to_zero(self, monkeypatch):
         fixed_rolls(monkeypatch, [2])
-        result = dice._roll_dice("1d4-10")
+        result = dice.roll_spec(
+            total_spec(count=1, sides=4, modifier=-10, modifier_mode="total")
+        )
         assert result.total == 0
 
     def test_single_die_natural_max_is_crit(self, monkeypatch):
         fixed_rolls(monkeypatch, [6])
-        result = dice._roll_dice("1d6")
+        result = dice.roll_spec(total_spec(count=1, sides=6))
         assert result.crit == "crit"
 
     def test_single_die_natural_min_is_fumble(self, monkeypatch):
         fixed_rolls(monkeypatch, [1])
-        result = dice._roll_dice("1d6")
+        result = dice.roll_spec(total_spec(count=1, sides=6))
         assert result.crit == "fumble"
 
     def test_keep_highest(self, monkeypatch):
         fixed_rolls(monkeypatch, [1, 4, 6])
-        result = dice._roll_dice("3d6kh2")
+        result = dice.roll_spec(
+            total_spec(count=3, sides=6, keep_mode="highest", keep_n=2)
+        )
         assert result.total == 10
-        assert result.keep_mode == "h"
+        assert result.keep_mode == "highest"
         assert result.keep_n == 2
         assert sorted(kept_raws(result)) == [4, 6]
         assert result.crit is None
 
     def test_keep_lowest(self, monkeypatch):
         fixed_rolls(monkeypatch, [1, 4, 6])
-        result = dice._roll_dice("3d6kl2")
+        result = dice.roll_spec(
+            total_spec(count=3, sides=6, keep_mode="lowest", keep_n=2)
+        )
         assert result.total == 5
-        assert result.keep_mode == "l"
+        assert result.keep_mode == "lowest"
         assert sorted(kept_raws(result)) == [1, 4]
 
     def test_advantage(self, monkeypatch):
         fixed_rolls(monkeypatch, [15, 20])
-        result = dice._roll_dice("1d20adv")
+        result = dice.roll_spec(
+            total_spec(
+                count=2, sides=20, keep_mode="highest", keep_n=1, adv_dis="advantage"
+            )
+        )
         assert result.total == 20
         assert result.adv_dis == "advantage"
         assert result.crit == "crit"
 
     def test_disadvantage(self, monkeypatch):
         fixed_rolls(monkeypatch, [15, 1])
-        result = dice._roll_dice("1d20dis")
+        result = dice.roll_spec(
+            total_spec(
+                count=2, sides=20, keep_mode="lowest", keep_n=1, adv_dis="disadvantage"
+            )
+        )
         assert result.total == 1
         assert result.adv_dis == "disadvantage"
         assert result.crit == "fumble"
@@ -102,87 +154,45 @@ class TestRollDicePlain:
     def test_advantage_at_max_count_allows_one_extra_die(self, monkeypatch):
         """adv/dis are allowed to exceed MAX_DICE_COUNT by one die, by design."""
         fixed_rolls(monkeypatch, [3] * 101)
-        result = dice._roll_dice("100d6adv")
-        assert result is not None
+        result = dice.roll_spec(
+            total_spec(
+                count=101, sides=6, keep_mode="highest", keep_n=100, adv_dis="advantage"
+            )
+        )
         assert len(result.dice) == 101
 
-    @pytest.mark.parametrize(
-        "expr",
-        [
-            "abc",
-            "0d6",  # count < 1
-            "1d1",  # sides < 2
-            "101d6",  # count > 100
-            "1d101",  # sides > 100
-            "2d20kh5",  # keep_n > count
-            "2d20kh0",  # keep_n < 1
-        ],
-    )
-    def test_invalid_expressions_return_none(self, expr):
-        assert dice._roll_dice(expr) is None
 
-
-class TestRollDiceGroup:
+class TestRollSpecDieModifier:
     def test_per_die_modifier_applied_individually(self, monkeypatch):
         fixed_rolls(monkeypatch, [1, 5, 9, 10])
-        result = dice._roll_dice("4(d10+2)")
+        result = dice.roll_spec(die_modifier_spec(4, 10, 2))
         assert result.total == (1 + 2) + (5 + 2) + (9 + 2) + (10 + 2)
         assert [d.value for d in result.dice] == [3, 7, 11, 12]
         assert result.crit is None  # more than one kept die
 
     def test_per_die_modifier_clamped_to_zero(self, monkeypatch):
         fixed_rolls(monkeypatch, [3])
-        result = dice._roll_dice("1(d4-10)")
+        result = dice.roll_spec(die_modifier_spec(1, 4, -10))
         assert result.total == 0
 
     def test_single_die_group_crit(self, monkeypatch):
         fixed_rolls(monkeypatch, [6])
-        result = dice._roll_dice("1(d6+3)")
+        result = dice.roll_spec(die_modifier_spec(1, 6, 3))
         assert result.total == 9
         assert result.crit == "crit"
 
     def test_single_die_group_fumble(self, monkeypatch):
         fixed_rolls(monkeypatch, [1])
-        result = dice._roll_dice("1(d6+3)")
+        result = dice.roll_spec(die_modifier_spec(1, 6, 3))
         assert result.total == 4
         assert result.crit == "fumble"
 
     def test_group_with_keep_highest(self, monkeypatch):
         fixed_rolls(monkeypatch, [1, 4, 6])
-        result = dice._roll_dice("3(d6+2)kh2")
+        result = dice.roll_spec(
+            die_modifier_spec(3, 6, 2, keep_mode="highest", keep_n=2)
+        )
         # modified values: 3, 6, 8 -> keep highest 2 -> 8 + 6
         assert result.total == 14
-        assert result.keep_mode == "h"
+        assert result.keep_mode == "highest"
         assert result.keep_n == 2
-
-    @pytest.mark.parametrize(
-        "expr",
-        [
-            "3(d6)",  # missing mandatory modifier
-            "0(d6+1)",  # count < 1
-            "101(d6+1)",  # count > 100
-            "2(d1+1)",  # sides < 2
-            "2(d101+1)",  # sides > 100
-        ],
-    )
-    def test_invalid_group_expressions_return_none(self, expr):
-        assert dice._roll_dice(expr) is None
-
-
-class TestRollMultiple:
-    def test_empty_input(self):
-        assert dice.roll("") == []
-        assert dice.roll("   ") == []
-
-    def test_multiple_expressions(self, monkeypatch):
-        fixed_rolls(monkeypatch, [4, 2])
-        results = dice.roll("1d6 1d4")
-        assert [expr for expr, _ in results] == ["1d6", "1d4"]
-        assert results[0][1].total == 4
-        assert results[1][1].total == 2
-
-    def test_mix_of_valid_and_invalid(self, monkeypatch):
-        fixed_rolls(monkeypatch, [4])
-        results = dice.roll("1d6 abc")
-        assert results[0][1] is not None
-        assert results[1] == ("abc", None)

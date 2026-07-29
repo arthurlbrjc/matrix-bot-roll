@@ -1,5 +1,10 @@
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Literal, Optional, Tuple
+
+ModifierMode = Literal["total", "per_die"]
+KeepMode = Literal["highest", "lowest"]
+AdvDis = Literal["advantage", "disadvantage"]
+Crit = Literal["crit", "fumble"]
 
 
 @dataclass
@@ -12,15 +17,37 @@ class Die:
 
 
 @dataclass
-class RollResult:
+class DiceRollResult:
     """The outcome of rolling one dice expression, free of any display formatting."""
 
     total: int
     dice: List[Die]
     sides: int
     modifier: int
-    modifier_mode: Optional[str]  # "total", "per_die", or None
-    keep_mode: Optional[str]  # "h", "l", or None
+    modifier_mode: ModifierMode
+    keep_mode: Optional[KeepMode]
     keep_n: Optional[int]
-    adv_dis: Optional[str]  # "advantage", "disadvantage", or None
-    crit: Optional[str]  # "crit", "fumble", or None
+    adv_dis: Optional[AdvDis]
+    crit: Optional[Crit]
+
+
+@dataclass
+class DiceSpec:
+    """A validated, fully resolved pre-roll request for one dice expression."""
+
+    count: int
+    sides: int
+    modifier: int
+    modifier_mode: ModifierMode
+    keep_mode: Optional[KeepMode]
+    keep_n: Optional[int]
+    adv_dis: Optional[AdvDis]
+
+
+@dataclass
+class RollResult:
+    """The aggregate outcome of rolling every expression in a `!roll` command."""
+
+    rolls: List[Tuple[str, DiceRollResult]]
+    message: Optional[str]
+    total: int

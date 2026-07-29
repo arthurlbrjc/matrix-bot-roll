@@ -1,0 +1,202 @@
+import re
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple, Union
+
+from matrix_bot_roll.constants import MAX_DICE_COUNT, MAX_DICE_SIDES
+from matrix_bot_roll.messages import INVALID_ROLL, NO_PREVIOUS_ROLL, ROLL_HELP, USAGE
+from matrix_bot_roll.models import AdvDis, DiceSpec, KeepMode
+
+# Matches things like: 1d20, 2d6+4, d8, 3d10-2, 2d20kh1, 4d6kl3, 2d20adv, 2d20dis
+DICE_WITH_TOTAL_MODIFIER_RE = re.compile(
+    r"^(\d*)\s*d\s*(\d+)\s*(kh\d+|kl\d+|adv|dis)?\s*([+-]\s*\d+)?$", re.IGNORECASE
+)
+
+# Matches a per-die modifier group like: 4(d10+2), 3(d6-1), 4(d10+2)kh1 — the
+# modifier is applied to each die individually rather than once to the summed
+# total; an optional keep/advantage suffix (outside the parens) then selects
+# among the modified values.
+DICE_WITH_DIE_MODIFIER_RE = re.compile(
+    r"^(\d+)\(\s*d\s*(\d+)\s*([+-]\s*\d+)\s*\)\s*(kh\d+|kl\d+|adv|dis)?$",
+    re.IGNORECASE,
+)
+
+_last_rolls: Dict[str, str] = {}
+
+
+@dataclass
+class RollCommand:
+    """A fully parsed and validated `!roll`/`!reroll` request, ready to be rolled."""
+
+    specs: List[Tuple[str, DiceSpec]]
+    message: Optional[str]
+
+
+def build_command(room_id: str, body: str) -> Union[RollCommand, str]:
+    """
+    Parse a full `!roll`/`!r`/`!reroll`/`!rr` message body.
+
+    Returns a `RollCommand` if the body contains at least one dice expression and
+    every expression in it parses and validates successfully. Otherwise returns a
+    plain-text reply string (usage, help, "no previous roll", or "invalid roll").
+    """
+    parts = body.split(maxsplit=1)
+    command = parts[0] if parts else ""
+    if command in ("!reroll", "!rr"):
+        return _build_reroll_command(room_id)
+    return _build_roll_command(room_id, parts)
+
+
+def _build_roll_command(room_id: str, parts: List[str]) -> Union[RollCommand, str]:
+    """Handle `!roll`/`!r`: bare usage, `--help` for detailed syntax, or an expression to parse and remember for `!reroll`."""
+    if len(parts) < 2:
+        return USAGE
+
+    arg = parts[1].strip()
+    if arg == "--help":
+        return ROLL_HELP
+
+    _last_rolls[room_id] = arg
+    return _parse_command(arg)
+
+
+def _build_reroll_command(room_id: str) -> Union[RollCommand, str]:
+    """Handle a `!reroll`/`!rr` message by re-parsing the last `!roll` expression in this room."""
+    arg = _last_rolls.get(room_id)
+    if arg is None:
+        return NO_PREVIOUS_ROLL
+    return _parse_command(arg)
+
+
+def _parse_command(arg: str) -> Union[RollCommand, str]:
+    """Split `arg` into dice expressions and an optional `| message` suffix, then validate all expressions."""
+    dice_part, _, message = arg.partition("|")
+
+    specs = []
+    for expr in dice_part.split():
+        spec = _parse_expr(expr)
+        if spec is None:
+            return INVALID_ROLL
+        specs.append((expr, spec))
+
+    return RollCommand(specs=specs, message=message.strip() or None)
+
+
+def _parse_expr(expr: str) -> Optional[DiceSpec]:
+    """Parse and validate a dice expression like '2d6+4' or '2d20kh1' into a `DiceSpec`."""
+    expr = expr.strip()
+
+    die_modifier_match = DICE_WITH_DIE_MODIFIER_RE.match(expr)
+    if die_modifier_match:
+        return _build_die_modifier_spec(die_modifier_match)
+
+    total_modifier_match = DICE_WITH_TOTAL_MODIFIER_RE.match(expr)
+    if total_modifier_match:
+        return _build_total_modifier_spec(total_modifier_match)
+
+    return None
+
+
+def _build_total_modifier_spec(
+    total_modifier_match: "re.Match[str]",
+) -> Optional[DiceSpec]:
+    """Build the `DiceSpec` for the plain syntax (e.g. '2d6+4'), where `modifier` applies once to the summed total."""
+    count_str, sides_str, keep_str, modifier_str = total_modifier_match.groups()
+    count = int(count_str) if count_str else 1
+    sides = int(sides_str)
+    modifier = int(modifier_str.replace(" ", "")) if modifier_str else 0
+
+    resolved = _validate(count, sides, keep_str)
+    if resolved is None:
+        return None
+    keep_mode, keep_n, adv_dis, count = resolved
+
+    return DiceSpec(
+        count=count,
+        sides=sides,
+        modifier=modifier,
+        modifier_mode="total",
+        keep_mode=keep_mode,
+        keep_n=keep_n,
+        adv_dis=adv_dis,
+    )
+
+
+def _build_die_modifier_spec(
+    die_modifier_match: "re.Match[str]",
+) -> Optional[DiceSpec]:
+    """
+    Build the `DiceSpec` for the per-die-modifier syntax (e.g. '4(d10+2)'), where `modifier`
+    applies to each die individually, then optionally keep/advantage-selects among the
+    modified values via the keep suffix (kh#, kl#, adv, dis).
+    """
+    count_str, sides_str, modifier_str, keep_str = die_modifier_match.groups()
+    count = int(count_str)
+    sides = int(sides_str)
+    modifier = int(modifier_str.replace(" ", ""))
+
+    resolved = _validate(count, sides, keep_str)
+    if resolved is None:
+        return None
+    keep_mode, keep_n, adv_dis, count = resolved
+
+    return DiceSpec(
+        count=count,
+        sides=sides,
+        modifier=modifier,
+        modifier_mode="per_die",
+        keep_mode=keep_mode,
+        keep_n=keep_n,
+        adv_dis=adv_dis,
+    )
+
+
+def _validate(
+    count: int, sides: int, keep_str: Optional[str]
+) -> Optional[Tuple[Optional[KeepMode], Optional[int], Optional[AdvDis], int]]:
+    """Combine `_in_bounds` and `_resolve_keep` into a single validate-or-None step."""
+    if not _in_bounds(count, sides):
+        return None
+    return _resolve_keep(keep_str, count)
+
+
+def _in_bounds(count: int, sides: int) -> bool:
+    """
+    Sanity limits so nobody rolls 999999d999999 and hangs the bot.
+
+    Checked against the requested count only — adv/dis are allowed to add one
+    extra die on top of MAX_DICE_COUNT (see `_resolve_keep`) by design.
+    """
+    return 1 <= count <= MAX_DICE_COUNT and 2 <= sides <= MAX_DICE_SIDES
+
+
+def _resolve_keep(
+    keep_str: Optional[str], count: int
+) -> Optional[Tuple[Optional[KeepMode], Optional[int], Optional[AdvDis], int]]:
+    """
+    Parse a keep/advantage/disadvantage suffix (kh#, kl#, adv, dis) against `count`
+    dice. Returns (keep_mode, keep_n, adv_dis, count) — with `count` bumped by one
+    for adv/dis — or None if there is no suffix or it resolves to an invalid keep_n.
+    """
+    if not keep_str:
+        return None, None, None, count
+
+    keep_str = keep_str.lower()
+    keep_mode: KeepMode
+    adv_dis: Optional[AdvDis]
+    if keep_str == "adv":
+        keep_mode, keep_n = "highest", count
+        count += 1  # adv/dis roll one extra die, then drop the single worst/best
+        adv_dis = "advantage"
+    elif keep_str == "dis":
+        keep_mode, keep_n = "lowest", count
+        count += 1
+        adv_dis = "disadvantage"
+    else:
+        keep_mode = "highest" if keep_str[1] == "h" else "lowest"
+        keep_n = int(keep_str[2:])
+        adv_dis = None
+
+    if keep_n < 1 or keep_n > count:
+        return None
+
+    return keep_mode, keep_n, adv_dis, count

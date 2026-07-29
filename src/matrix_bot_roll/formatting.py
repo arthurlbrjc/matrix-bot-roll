@@ -1,45 +1,8 @@
 import html
 import re
-from typing import List, Optional, Tuple
+from typing import List
 
-from matrix_bot_roll.models import Die, RollResult
-
-
-def format_roll_results(
-    results: List[Tuple[str, Optional[RollResult]]], message: Optional[str] = None
-) -> str:
-    """
-    Turn roll() output into a human-readable string.
-    Invalid expressions are flagged; valid ones show total + detail.
-    Also appends a grand total across all valid rolls if there's more than one,
-    and the optional `message` attached to the roll, if any.
-    """
-    lines = []
-    grand_total = 0
-    valid_count = 0
-
-    for expr, result in results:
-        if result is None:
-            lines.append(f"`{expr}` → invalid expression")
-            continue
-        suffix = (
-            " 🎯 CRIT!"
-            if result.crit == "crit"
-            else " 💥 FUMBLE!" if result.crit == "fumble" else ""
-        )
-        lines.append(
-            f"🎲 {expr} → {_format_detail(result)} = **{result.total}**{suffix}"
-        )
-        grand_total += result.total
-        valid_count += 1
-
-    if valid_count > 1:
-        lines.append(f"**Total: {grand_total}**")
-
-    if message:
-        lines.append(f"💬 {message}")
-
-    return "\n".join(lines)
+from matrix_bot_roll.models import Die, DiceRollResult
 
 
 def markdown_to_html(text: str) -> str:
@@ -61,7 +24,7 @@ def markdown_to_html(text: str) -> str:
     return re.sub(r"`(.+?)`", r"<code>\1</code>", text)
 
 
-def _format_detail(result: RollResult) -> str:
+def format_detail(result: DiceRollResult) -> str:
     """Build the '[rolls] keep highest N → [kept] +mod' detail string for one roll."""
     detail = f"[{', '.join(_format_die(d, result) for d in result.dice)}]"
 
@@ -69,8 +32,9 @@ def _format_detail(result: RollResult) -> str:
     if result.adv_dis:
         detail += f" with {result.adv_dis} → [{_join_kept(kept, result)}]"
     elif result.keep_mode:
-        word = "highest" if result.keep_mode == "h" else "lowest"
-        detail += f" keep {word} {result.keep_n} → [{_join_kept(kept, result)}]"
+        detail += (
+            f" keep {result.keep_mode} {result.keep_n} → [{_join_kept(kept, result)}]"
+        )
 
     if result.modifier_mode == "total" and result.modifier:
         sign = "+" if result.modifier > 0 else ""
@@ -79,11 +43,11 @@ def _format_detail(result: RollResult) -> str:
     return detail
 
 
-def _join_kept(kept: List[Die], result: RollResult) -> str:
+def _join_kept(kept: List[Die], result: DiceRollResult) -> str:
     return ", ".join(_kept_repr(d, result) for d in kept)
 
 
-def _format_die(die: Die, result: RollResult) -> str:
+def _format_die(die: Die, result: DiceRollResult) -> str:
     """Render one rolled die as shown in the initial roll list."""
     if result.modifier_mode == "per_die":
         sign = "+" if result.modifier > 0 else "-"
@@ -91,7 +55,7 @@ def _format_die(die: Die, result: RollResult) -> str:
     return _mark(die.raw, result.sides)
 
 
-def _kept_repr(die: Die, result: RollResult) -> str:
+def _kept_repr(die: Die, result: DiceRollResult) -> str:
     """Render one kept die as shown in the keep/advantage suffix."""
     if result.modifier_mode == "per_die":
         return f"**{die.value}**"
