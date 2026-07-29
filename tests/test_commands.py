@@ -45,6 +45,11 @@ class TestBuildCommandRoll:
         assert isinstance(result, RollCommand)
         assert result.message is None
 
+    def test_no_target_leaves_target_none(self):
+        result = build_command("!room:example.org", "!roll 1d6")
+        assert isinstance(result, RollCommand)
+        assert result.target is None
+
     def test_invalid_expression_returns_invalid_roll(self):
         assert build_command("!room:example.org", "!roll bogus") == INVALID_ROLL
 
@@ -52,6 +57,12 @@ class TestBuildCommandRoll:
         """One deliberate behavior change: any invalid expr rejects the whole line."""
         result = build_command("!room:example.org", "!roll 4d20 bogus 1d6")
         assert result == INVALID_ROLL
+
+    def test_message_only_with_no_dice_expression_is_invalid(self):
+        """A `| message` suffix with no dice expression at all is not a valid roll."""
+        assert build_command("!room:example.org", "!roll | just a message") == (
+            INVALID_ROLL
+        )
 
     @pytest.mark.parametrize(
         "expr",
@@ -79,6 +90,51 @@ class TestBuildCommandRoll:
         result = build_command(room_id, "!reroll")
         assert isinstance(result, RollCommand)
         assert [expr for expr, _ in result.specs] == ["1d6+4"]
+
+
+class TestBuildCommandTarget:
+    @pytest.mark.parametrize(
+        "operator",
+        [">", "<", ">=", "<=", "="],
+    )
+    def test_each_operator_is_parsed(self, operator):
+        result = build_command("!room:example.org", f"!roll 1d6 {operator}15")
+        assert isinstance(result, RollCommand)
+        assert result.target is not None
+        assert result.target.operator == operator
+        assert result.target.value == 15
+
+    def test_target_applies_to_whole_line_not_per_expression(self):
+        result = build_command("!room:example.org", "!roll 1d6 1d4 >15")
+        assert isinstance(result, RollCommand)
+        assert [expr for expr, _ in result.specs] == ["1d6", "1d4"]
+        assert result.target is not None
+        assert result.target.value == 15
+
+    def test_target_and_message_coexist(self):
+        result = build_command("!room:example.org", "!roll 1d6 >15 | attack")
+        assert isinstance(result, RollCommand)
+        assert result.target is not None
+        assert result.target.value == 15
+        assert result.message == "attack"
+
+    @pytest.mark.parametrize(
+        "bad_target",
+        [
+            ">",  # operator with no value
+            ">=",
+            "><15",  # not a real operator
+            "15",  # bare number, not a comparison
+            ">abc",  # non-numeric target
+        ],
+    )
+    def test_malformed_target_rejects_whole_command(self, bad_target):
+        result = build_command("!room:example.org", f"!roll 1d6 {bad_target}")
+        assert result == INVALID_ROLL
+
+    def test_target_with_no_dice_expression_rejects_whole_command(self):
+        result = build_command("!room:example.org", "!roll >15")
+        assert result == INVALID_ROLL
 
 
 class TestBuildCommandReroll:

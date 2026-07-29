@@ -1,10 +1,10 @@
 import re
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union, cast
 
 from matrix_bot_roll.constants import MAX_DICE_COUNT, MAX_DICE_SIDES
 from matrix_bot_roll.messages import INVALID_ROLL, NO_PREVIOUS_ROLL, ROLL_HELP, USAGE
-from matrix_bot_roll.models import AdvDis, DiceSpec, KeepMode
+from matrix_bot_roll.models import AdvDis, DiceSpec, KeepMode, Target, TargetOperator
 
 # Matches things like: 1d20, 2d6+4, d8, 3d10-2, 2d20kh1, 4d6kl3, 2d20adv, 2d20dis
 DICE_WITH_TOTAL_MODIFIER_RE = re.compile(
@@ -20,6 +20,11 @@ DICE_WITH_DIE_MODIFIER_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Matches a trailing target-number comparison for the whole line, e.g. '>15',
+# '>=8', '=10' — always the last space-separated token, applied to the summed
+# total across every dice expression on the line (see `_parse_command`).
+TARGET_RE = re.compile(r"^(>=|<=|>|<|=)(\d+)$")
+
 _last_rolls: Dict[str, str] = {}
 
 
@@ -29,6 +34,7 @@ class RollCommand:
 
     specs: List[Tuple[str, DiceSpec]]
     message: Optional[str]
+    target: Optional[Target]
 
 
 def build_command(room_id: str, body: str) -> Union[RollCommand, str]:
@@ -68,17 +74,38 @@ def _build_reroll_command(room_id: str) -> Union[RollCommand, str]:
 
 
 def _parse_command(arg: str) -> Union[RollCommand, str]:
-    """Split `arg` into dice expressions and an optional `| message` suffix, then validate all expressions."""
+    """
+    Split `arg` into dice expressions, an optional trailing target (e.g. '>15')
+    applied to their summed total, and an optional `| message` suffix, then validate
+    all expressions. At least one dice expression is required.
+    """
     dice_part, _, message = arg.partition("|")
 
+    exprs = dice_part.split()
+    target = _parse_target(exprs[-1]) if exprs else None
+    if target is not None:
+        exprs = exprs[:-1]
+
+    if not exprs:
+        return INVALID_ROLL
+
     specs = []
-    for expr in dice_part.split():
+    for expr in exprs:
         spec = _parse_expr(expr)
         if spec is None:
             return INVALID_ROLL
         specs.append((expr, spec))
 
-    return RollCommand(specs=specs, message=message.strip() or None)
+    return RollCommand(specs=specs, message=message.strip() or None, target=target)
+
+
+def _parse_target(token: str) -> Optional[Target]:
+    """Parse a trailing '>15'-style token into a `Target`, or None if it isn't one."""
+    match = TARGET_RE.match(token)
+    if match is None:
+        return None
+    operator, value_str = match.groups()
+    return Target(operator=cast(TargetOperator, operator), value=int(value_str))
 
 
 def _parse_expr(expr: str) -> Optional[DiceSpec]:

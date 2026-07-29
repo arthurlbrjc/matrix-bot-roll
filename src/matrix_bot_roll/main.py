@@ -47,18 +47,31 @@ def _format_result(result: RollResult) -> str:
     """
     Turn a RollResult into a human-readable string.
 
-    Also appends a grand total across all rolls if there's more than one, and
+    Also appends a grand total across all rolls if there's more than one (or a
+    target was given), the pass/fail marker if a target was given, and
     the optional `message` attached to the roll, if any.
     """
     lines = [_format_roll_line(expr, roll) for expr, roll in result.rolls]
 
-    if len(result.rolls) > 1:
+    if result.target is not None:
+        lines.append(_format_target_line(result))
+    elif len(result.rolls) > 1:
         lines.append(f"**Total: {result.total}**")
 
     if result.message:
         lines.append(f"💬 {result.message}")
 
     return "\n".join(lines)
+
+
+def _format_target_line(result: RollResult) -> str:
+    """Render '**Total: X** vs <operator><value> → ✅/❌' for a roll that was compared to a target."""
+    assert result.target is not None
+    marker = "✅ Success!" if result.success else "❌ Failure!"
+    return (
+        f"**Total: {result.total}** vs {result.target.operator}{result.target.value} "
+        f"→ {marker}"
+    )
 
 
 def _format_roll_line(expr: str, roll: DiceRollResult) -> str:

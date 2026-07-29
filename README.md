@@ -7,7 +7,7 @@ A Matrix bot that listens for `!roll` commands and replies with dice roll result
 
 ## Features
 
-- `!roll <expression> [expression ...] [| message]` (or `!r`) — roll dice, e.g. `!roll 2d6+4`, `!roll 4d20 1d6+2 | attack`
+- `!roll <expression> [expression ...] [target] [| message]` (or `!r`) — roll dice, e.g. `!roll 2d6+4`, `!roll 4d20 1d6+2 | attack`, `!roll d20+5 >15`
 - `!roll --help` — detailed roll syntax and examples (modifiers, kh/kl, adv/dis, group modifiers)
 - `!reroll` (or `!rr`) — repeat the last `!roll` expression sent in the room (message included)
 - Auto-joins any room it's invited to

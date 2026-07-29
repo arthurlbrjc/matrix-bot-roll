@@ -63,6 +63,28 @@ class TestRoll:
         output = _send_body("!r-room:example.org", "!r 1d6")
         assert "🎲 1d6" in output
 
+    def test_target_success_shows_marker_and_total(self):
+        """1d6 is always > 0, so this deterministically succeeds."""
+        output = _send_body("!room:example.org", "!roll 1d6 >0")
+        assert "**Total:" in output
+        assert "✅" in output
+        assert "❌" not in output
+
+    def test_target_failure_shows_marker_and_total(self):
+        """1d6 can never exceed 100, so this deterministically fails."""
+        output = _send_body("!room:example.org", "!roll 1d6 >100")
+        assert "**Total:" in output
+        assert "❌" in output
+        assert "✅" not in output
+
+    def test_no_target_has_no_marker(self):
+        output = _send_body("!room:example.org", "!roll 1d6")
+        assert "✅" not in output
+        assert "❌" not in output
+
+    def test_malformed_target_returns_invalid_roll(self):
+        assert _send_body("!room:example.org", "!roll 1d6 >") == INVALID_ROLL
+
 
 class TestReroll:
     def test_no_previous_roll_returns_message(self):

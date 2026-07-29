@@ -2,7 +2,7 @@
 
 USAGE = "\n".join(
     [
-        "• `!roll <expression> [expression ...] [| message]` (or `!r`) — roll dice",
+        "• `!roll <expression> [expression ...] [target] [| message]` (or `!r`) — roll dice",
         "• `!roll --help` — detailed roll syntax and examples",
         "• `!reroll` (or `!rr`) — repeat the last `!roll` expression in this room",
     ]
@@ -10,7 +10,7 @@ USAGE = "\n".join(
 
 ROLL_HELP = "\n".join(
     [
-        "**!roll <expression> [expression ...] [| message]** (alias: `!r`)",
+        "**!roll <expression> [expression ...] [target] [| message]** (alias: `!r`)",
         "",
         "• `!roll d20` — roll one die",
         "• `!roll 4d6` — roll multiple dice",
@@ -21,6 +21,8 @@ ROLL_HELP = "\n".join(
         "• `!roll 4(d10+2)`, `!roll 4(d10+2)kh1`, `!roll 2(d20+3)adv` "
         "— per-die modifier and adv/dis/kh/kl",
         "• `!roll 2d6kh1+4 3(d10-2)adv` — combine everything",
+        "• `!roll d20+5 >15` — compare the total against a target number "
+        "(`>`, `<`, `>=`, `<=`, `=`) for pass/fail",
         "• `!roll 3d8+4 | attack` — attach a message to the roll",
     ]
 )

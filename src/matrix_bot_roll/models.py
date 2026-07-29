@@ -5,6 +5,7 @@ ModifierMode = Literal["total", "per_die"]
 KeepMode = Literal["highest", "lowest"]
 AdvDis = Literal["advantage", "disadvantage"]
 Crit = Literal["crit", "fumble"]
+TargetOperator = Literal[">", "<", ">=", "<=", "="]
 
 
 @dataclass
@@ -45,9 +46,19 @@ class DiceSpec:
 
 
 @dataclass
+class Target:
+    """A target-number comparison (e.g. '>15') applied to a `RollCommand`'s aggregate total."""
+
+    operator: TargetOperator
+    value: int
+
+
+@dataclass
 class RollResult:
     """The aggregate outcome of rolling every expression in a `!roll` command."""
 
     rolls: List[Tuple[str, DiceRollResult]]
     message: Optional[str]
     total: int
+    target: Optional[Target]
+    success: Optional[bool]
