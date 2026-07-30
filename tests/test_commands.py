@@ -229,6 +229,68 @@ class TestBuildCommandReroll:
         build_command(room_id, "!roll bogus")
         assert build_command(room_id, "!reroll") == NO_PREVIOUS_ROLL
 
+    def test_reroll_without_message_replays_original_message(self):
+        room_id = "!reroll-msg-room:example.org"
+        build_command(room_id, "!roll 1d6 | attack")
+        parsed = build_command(room_id, "!reroll")
+        assert isinstance(parsed, ParsedRoll)
+        assert parsed.message == "attack"
+
+    def test_reroll_with_message_overrides_original_message(self):
+        room_id = "!reroll-msg-room2:example.org"
+        build_command(room_id, "!roll 1d6 | attack")
+        parsed = build_command(room_id, "!reroll | defend")
+        assert isinstance(parsed, ParsedRoll)
+        assert [expr for expr, _ in parsed.command.specs] == ["1d6"]
+        assert parsed.message == "defend"
+
+    def test_reroll_with_message_on_originally_messageless_roll(self):
+        room_id = "!reroll-msg-room3:example.org"
+        build_command(room_id, "!roll 1d6")
+        parsed = build_command(room_id, "!reroll | now with flavor")
+        assert isinstance(parsed, ParsedRoll)
+        assert parsed.message == "now with flavor"
+
+    def test_reroll_with_empty_message_clears_message(self):
+        room_id = "!reroll-msg-room4:example.org"
+        build_command(room_id, "!roll 1d6 | attack")
+        parsed = build_command(room_id, "!reroll |")
+        assert isinstance(parsed, ParsedRoll)
+        assert parsed.message is None
+
+    def test_reroll_with_trailing_text_but_no_pipe_is_invalid(self):
+        room_id = "!reroll-msg-room5:example.org"
+        build_command(room_id, "!roll 1d6")
+        assert build_command(room_id, "!reroll defend") == INVALID_ROLL
+
+    def test_reroll_with_text_before_pipe_is_invalid(self):
+        room_id = "!reroll-msg-room7:example.org"
+        build_command(room_id, "!roll 1d6")
+        assert build_command(room_id, "!reroll bogus | defend") == INVALID_ROLL
+
+    def test_reroll_message_persists_for_later_bare_reroll(self):
+        room_id = "!reroll-msg-room8:example.org"
+        build_command(room_id, "!roll 1d6 | attack")
+        build_command(room_id, "!reroll | defend")
+        parsed = build_command(room_id, "!reroll")
+        assert isinstance(parsed, ParsedRoll)
+        assert parsed.message == "defend"
+
+    def test_invalid_reroll_message_does_not_overwrite_remembered_roll(self):
+        room_id = "!reroll-msg-room9:example.org"
+        build_command(room_id, "!roll 1d6 | attack")
+        build_command(room_id, "!reroll bogus | defend")
+        parsed = build_command(room_id, "!reroll")
+        assert isinstance(parsed, ParsedRoll)
+        assert parsed.message == "attack"
+
+    def test_rr_alias_accepts_message(self):
+        room_id = "!reroll-msg-room6:example.org"
+        build_command(room_id, "!roll 1d6")
+        parsed = build_command(room_id, "!rr | flourish")
+        assert isinstance(parsed, ParsedRoll)
+        assert parsed.message == "flourish"
+
 
 class TestParseExpr:
     def test_default_count_is_one(self):

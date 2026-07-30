@@ -61,7 +61,8 @@ def build_command(room_id: str, body: str) -> Union[ParsedRoll, str]:
     parts = body.split(maxsplit=1)
     command = parts[0] if parts else ""
     if command in ("!reroll", "!rr"):
-        return _build_reroll_command(room_id)
+        arg = parts[1].strip() if len(parts) > 1 else None
+        return _build_reroll_command(room_id, arg)
     return _build_roll_command(room_id, parts)
 
 
@@ -80,12 +81,30 @@ def _build_roll_command(room_id: str, parts: List[str]) -> Union[ParsedRoll, str
     return result
 
 
-def _build_reroll_command(room_id: str) -> Union[ParsedRoll, str]:
-    """Handle a `!reroll`/`!rr` message by re-parsing the last `!roll` expression in this room."""
-    arg = _last_rolls.get(room_id)
-    if arg is None:
+def _build_reroll_command(room_id: str, arg: Optional[str]) -> Union[ParsedRoll, str]:
+    """
+    Handle a `!reroll`/`!rr` message by re-parsing the last `!roll` expression in
+    this room. An optional `| message` suffix on the reroll itself replaces any
+    message the original roll had, and is remembered for subsequent bare
+    `!reroll`s in this room; without it, the original message (if any) is
+    replayed unchanged.
+    """
+    stored = _last_rolls.get(room_id)
+    if stored is None:
         return NO_PREVIOUS_ROLL
-    return _parse_command(arg)
+    if not arg:
+        return _parse_command(stored)
+
+    prefix, _, message = arg.partition("|")
+    if "|" not in arg or prefix.strip():
+        return INVALID_ROLL
+
+    dice_part = stored.partition("|")[0].strip()
+    new_arg = f"{dice_part} | {message}"
+    result = _parse_command(new_arg)
+    if isinstance(result, ParsedRoll):
+        _last_rolls[room_id] = new_arg
+    return result
 
 
 def _parse_command(arg: str) -> Union[ParsedRoll, str]:
