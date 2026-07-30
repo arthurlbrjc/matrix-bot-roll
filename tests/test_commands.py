@@ -86,6 +86,14 @@ class TestBuildCommandRoll:
         assert isinstance(result, RollCommand)
         assert [expr for expr, _ in result.specs] == ["1d6+4"]
 
+    def test_invalid_expression_does_not_overwrite_remembered_roll(self):
+        room_id = "!room-invalid:example.org"
+        build_command(room_id, "!roll 1d6+4")
+        build_command(room_id, "!roll bogus")
+        result = _roll(room_id, "!reroll")
+        assert isinstance(result, RollCommand)
+        assert [expr for expr, _ in result.specs] == ["1d6+4"]
+
 
 class TestBuildCommandMessage:
     def test_message_suffix_is_extracted(self):
@@ -215,6 +223,11 @@ class TestBuildCommandReroll:
         result = _roll(room_id, "!rr")
         assert isinstance(result, RollCommand)
         assert [expr for expr, _ in result.specs] == ["1d6"]
+
+    def test_invalid_first_roll_leaves_no_previous_roll(self):
+        room_id = "!invalid-only-room:example.org"
+        build_command(room_id, "!roll bogus")
+        assert build_command(room_id, "!reroll") == NO_PREVIOUS_ROLL
 
 
 class TestParseExpr:

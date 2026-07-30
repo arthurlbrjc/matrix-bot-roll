@@ -74,8 +74,10 @@ def _build_roll_command(room_id: str, parts: List[str]) -> Union[ParsedRoll, str
     if arg == "--help":
         return ROLL_HELP
 
-    _last_rolls[room_id] = arg
-    return _parse_command(arg)
+    result = _parse_command(arg)
+    if isinstance(result, ParsedRoll):
+        _last_rolls[room_id] = arg
+    return result
 
 
 def _build_reroll_command(room_id: str) -> Union[ParsedRoll, str]:
