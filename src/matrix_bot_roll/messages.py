@@ -28,9 +28,7 @@ ROLL_HELP = "\n".join(
         "(`>`, `<`, `>=`, `<=`, `=`, `!=`) for pass/fail",
         "• `!roll 3d8+4 | attack` — attach a message to the roll",
         "• `!roll 4d6kh3 -v` (or `--verbose`) — show the full per-die breakdown "
-        "(terse by default); the flag can go anywhere in the command",
-        "• `!detail` (or `!d`) — re-show the last roll in this room with the "
-        "full breakdown, without rolling again",
+        "(terse by default); the flag can go anywhere in the command"
     ]
 )
 
