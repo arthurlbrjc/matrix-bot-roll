@@ -21,27 +21,40 @@ DICE_WITH_DIE_MODIFIER_RE = re.compile(
 )
 
 # Matches a trailing target-number comparison for the whole line, e.g. '>15',
-# '>=8', '=10', '!=3' — always the last space-separated token, applied to the
-# summed total across every dice expression on the line (see `_parse_command`).
+# '>=8', '=10', '!=3' — applied to the summed total across every dice expression
+# on the line (see `_parse_command`). May appear anywhere among the
+# space-separated tokens, like the verbose flag.
 TARGET_RE = re.compile(r"^(>=|<=|!=|>|<|=)(-?\d+)$")
+
+# The verbose flag may appear anywhere among the space-separated tokens (like
+# a normal CLI flag), rather than in a fixed position.
+VERBOSE_FLAGS = {"-v", "--verbose"}
 
 _last_rolls: Dict[str, str] = {}
 
 
 @dataclass
 class RollCommand:
-    """A fully parsed and validated `!roll`/`!reroll` request, ready to be rolled."""
+    """A fully parsed and validated `!roll`/`!reroll` request, ready to be rolled — the rolling domain only, with no display concerns."""
 
     specs: List[Tuple[str, DiceSpec]]
-    message: Optional[str]
     target: Optional[Target]
 
 
-def build_command(room_id: str, body: str) -> Union[RollCommand, str]:
+@dataclass
+class ParsedRoll:
+    """A successfully parsed `!roll`/`!reroll` request: the `command` to roll, plus display-only extras it carries no knowledge of."""
+
+    command: RollCommand
+    verbose: bool
+    message: Optional[str]
+
+
+def build_command(room_id: str, body: str) -> Union[ParsedRoll, str]:
     """
     Parse a full `!roll`/`!r`/`!reroll`/`!rr` message body.
 
-    Returns a `RollCommand` if the body contains at least one dice expression and
+    Returns a `ParsedRoll` if the body contains at least one dice expression and
     every expression in it parses and validates successfully. Otherwise returns a
     plain-text reply string (usage, help, "no previous roll", or "invalid roll").
     """
@@ -52,7 +65,7 @@ def build_command(room_id: str, body: str) -> Union[RollCommand, str]:
     return _build_roll_command(room_id, parts)
 
 
-def _build_roll_command(room_id: str, parts: List[str]) -> Union[RollCommand, str]:
+def _build_roll_command(room_id: str, parts: List[str]) -> Union[ParsedRoll, str]:
     """Handle `!roll`/`!r`: bare usage, `--help` for detailed syntax, or an expression to parse and remember for `!reroll`."""
     if len(parts) < 2:
         return USAGE
@@ -65,7 +78,7 @@ def _build_roll_command(room_id: str, parts: List[str]) -> Union[RollCommand, st
     return _parse_command(arg)
 
 
-def _build_reroll_command(room_id: str) -> Union[RollCommand, str]:
+def _build_reroll_command(room_id: str) -> Union[ParsedRoll, str]:
     """Handle a `!reroll`/`!rr` message by re-parsing the last `!roll` expression in this room."""
     arg = _last_rolls.get(room_id)
     if arg is None:
@@ -73,18 +86,31 @@ def _build_reroll_command(room_id: str) -> Union[RollCommand, str]:
     return _parse_command(arg)
 
 
-def _parse_command(arg: str) -> Union[RollCommand, str]:
+def _parse_command(arg: str) -> Union[ParsedRoll, str]:
     """
-    Split `arg` into dice expressions, an optional trailing target (e.g. '>15')
-    applied to their summed total, and an optional `| message` suffix, then validate
-    all expressions. At least one dice expression is required.
+    Split `arg` into dice expressions, an optional target (e.g. '>15') applied to
+    their summed total, an optional `-v`/`--verbose` flag, and an optional
+    `| message` suffix, then validate all expressions. The target and verbose flag
+    may appear anywhere among the space-separated tokens, in any order; a repeated
+    verbose flag is harmless, but a second target token is rejected as ambiguous.
+    At least one dice expression is required.
     """
     dice_part, _, message = arg.partition("|")
 
-    exprs = dice_part.split()
-    target = _parse_target(exprs[-1]) if exprs else None
-    if target is not None:
-        exprs = exprs[:-1]
+    verbose = False
+    target: Optional[Target] = None
+    exprs = []
+    for token in dice_part.split():
+        if token.lower() in VERBOSE_FLAGS:
+            verbose = True
+            continue
+        parsed_target = _parse_target(token)
+        if parsed_target is not None:
+            if target is not None:
+                return INVALID_ROLL
+            target = parsed_target
+            continue
+        exprs.append(token)
 
     if not exprs:
         return INVALID_ROLL
@@ -96,7 +122,8 @@ def _parse_command(arg: str) -> Union[RollCommand, str]:
             return INVALID_ROLL
         specs.append((expr, spec))
 
-    return RollCommand(specs=specs, message=message.strip() or None, target=target)
+    command = RollCommand(specs=specs, target=target)
+    return ParsedRoll(command=command, verbose=verbose, message=message.strip() or None)
 
 
 def _parse_target(token: str) -> Optional[Target]:

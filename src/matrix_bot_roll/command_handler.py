@@ -18,7 +18,6 @@ def handle(command: RollCommand) -> RollResult:
     )
     return RollResult(
         rolls=rolls,
-        message=command.message,
         total=total,
         target=command.target,
         success=success,

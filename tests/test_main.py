@@ -63,19 +63,23 @@ class TestRoll:
         output = _send_body("!r-room:example.org", "!r 1d6")
         assert "🎲 1d6" in output
 
-    def test_target_success_shows_marker_and_total(self):
+    def test_target_success_is_inlined_on_the_roll_line(self):
         """2d6 is always > 0, so this deterministically succeeds.
 
         Two dice are always kept here, so no natural crit/fumble override can
         apply (unlike `1d6`, which keeps a single die and could otherwise flip
-        the outcome on a roll of 1 or 6).
+        the outcome on a roll of 1 or 6). A single expression compared to a
+        target is inlined onto its own line rather than getting a separate
+        '**Total:**' line.
         """
         output = _send_body("!room:example.org", "!roll 2d6 >0")
-        assert "**Total:" in output
+        assert output.count("🎲") == 1
+        assert "**Total:" not in output
+        assert ">0" in output
         assert "✅" in output
         assert "❌" not in output
 
-    def test_target_failure_shows_marker_and_total(self):
+    def test_target_failure_is_inlined_on_the_roll_line(self):
         """2d6 can never exceed 100, so this deterministically fails.
 
         Two dice are always kept here, so no natural crit/fumble override can
@@ -83,9 +87,25 @@ class TestRoll:
         the outcome on a roll of 1 or 6).
         """
         output = _send_body("!room:example.org", "!roll 2d6 >100")
-        assert "**Total:" in output
+        assert output.count("🎲") == 1
+        assert "**Total:" not in output
+        assert ">100" in output
         assert "❌" in output
         assert "✅" not in output
+
+    def test_multi_expression_target_keeps_separate_total_line(self):
+        """With more than one expression, the target isn't tied to any single roll, so it keeps its own '**Total:**' line."""
+        output = _send_body("!room:example.org", "!roll 1d6 1d4 >0")
+        assert output.count("🎲") == 2
+        assert "**Total:" in output
+        assert "✅" in output
+
+    def test_verbose_target_keeps_separate_total_line(self):
+        """In verbose mode the roll line is already busy with the per-die breakdown, so the target keeps its own dedicated line rather than being inlined."""
+        output = _send_body("!room:example.org", "!roll 2d6 >0 -v")
+        assert output.count("🎲") == 1
+        assert "**Total:" in output
+        assert "✅" in output
 
     def test_no_target_has_no_marker(self):
         output = _send_body("!room:example.org", "!roll 1d6")
@@ -94,6 +114,56 @@ class TestRoll:
 
     def test_malformed_target_returns_invalid_roll(self):
         assert _send_body("!room:example.org", "!roll 1d6 >") == INVALID_ROLL
+
+    def test_default_output_is_terse(self):
+        output = _send_body("!room:example.org", "!roll 4d6kh3")
+        assert "keep" not in output
+        assert "[" not in output
+
+    def test_verbose_flag_shows_full_breakdown(self):
+        output = _send_body("!room:example.org", "!roll 4d6kh3 -v")
+        assert "keep highest 3" in output
+        assert "[" in output
+
+    def test_verbose_flag_placement_does_not_matter(self):
+        before = _send_body("!room:example.org", "!roll -v 4d6kh3")
+        assert "keep highest 3" in before
+
+
+class TestDetail:
+    def test_no_previous_roll_returns_message(self):
+        assert _send_body("!detail-empty:example.org", "!detail") == NO_PREVIOUS_ROLL
+
+    def test_d_alias_with_no_previous_roll_returns_message(self):
+        assert _send_body("!d-empty:example.org", "!d") == NO_PREVIOUS_ROLL
+
+    def test_shows_full_breakdown_of_last_roll(self):
+        room_id = "!detail-room:example.org"
+        _send_body(room_id, "!roll 4d6kh3")
+        output = _send_body(room_id, "!detail")
+        assert "keep highest 3" in output
+        assert "[" in output
+
+    def test_target_keeps_separate_total_line(self):
+        """`!detail` always renders verbose, so a single-expression target keeps its own dedicated line rather than being inlined."""
+        room_id = "!detail-target-room:example.org"
+        _send_body(room_id, "!roll 2d6 >0")
+        output = _send_body(room_id, "!detail")
+        assert output.count("🎲") == 1
+        assert "**Total:" in output
+        assert "✅" in output
+
+    def test_does_not_roll_again(self):
+        room_id = "!detail-no-reroll:example.org"
+        first = _send_body(room_id, "!roll 1d6 -v")
+        second = _send_body(room_id, "!detail")
+        assert first == second
+
+    def test_d_alias_shows_last_roll(self):
+        room_id = "!detail-d-alias:example.org"
+        _send_body(room_id, "!roll 1d6")
+        output = _send_body(room_id, "!d")
+        assert "🎲 1d6" in output
 
 
 class TestReroll:

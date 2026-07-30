@@ -38,39 +38,29 @@ def total_spec(
 class TestHandle:
     def test_single_roll_result(self, monkeypatch):
         fixed_rolls(monkeypatch, [4])
-        command = RollCommand(specs=[("1d6", total_spec())], message=None, target=None)
+        command = RollCommand(specs=[("1d6", total_spec())], target=None)
         result = command_handler.handle(command)
         assert [expr for expr, _ in result.rolls] == ["1d6"]
         assert result.total == 4
-        assert result.message is None
 
     def test_total_sums_every_roll(self, monkeypatch):
         fixed_rolls(monkeypatch, [4, 2])
         command = RollCommand(
             specs=[("1d6", total_spec()), ("1d4", total_spec(sides=4))],
-            message=None,
             target=None,
         )
         result = command_handler.handle(command)
         assert result.total == 6
 
-    def test_message_is_passed_through(self, monkeypatch):
-        fixed_rolls(monkeypatch, [4])
-        command = RollCommand(
-            specs=[("1d6", total_spec())], message="attack", target=None
-        )
-        result = command_handler.handle(command)
-        assert result.message == "attack"
-
     def test_empty_specs_yields_zero_total(self):
-        command = RollCommand(specs=[], message="just a message", target=None)
+        command = RollCommand(specs=[], target=None)
         result = command_handler.handle(command)
         assert result.rolls == []
         assert result.total == 0
 
     def test_no_target_leaves_success_none(self, monkeypatch):
         fixed_rolls(monkeypatch, [4])
-        command = RollCommand(specs=[("1d6", total_spec())], message=None, target=None)
+        command = RollCommand(specs=[("1d6", total_spec())], target=None)
         result = command_handler.handle(command)
         assert result.target is None
         assert result.success is None
@@ -81,7 +71,6 @@ class TestHandleTarget:
         fixed_rolls(monkeypatch, [5])
         command = RollCommand(
             specs=[("1d6", total_spec())],
-            message=None,
             target=Target(operator=">", value=3),
         )
         result = command_handler.handle(command)
@@ -91,7 +80,6 @@ class TestHandleTarget:
         fixed_rolls(monkeypatch, [2])
         command = RollCommand(
             specs=[("1d6", total_spec())],
-            message=None,
             target=Target(operator=">", value=3),
         )
         result = command_handler.handle(command)
@@ -101,7 +89,6 @@ class TestHandleTarget:
         fixed_rolls(monkeypatch, [2])
         command = RollCommand(
             specs=[("1d6", total_spec())],
-            message=None,
             target=Target(operator="<", value=3),
         )
         result = command_handler.handle(command)
@@ -111,7 +98,6 @@ class TestHandleTarget:
         fixed_rolls(monkeypatch, [3])
         command = RollCommand(
             specs=[("1d6", total_spec())],
-            message=None,
             target=Target(operator=">=", value=3),
         )
         result = command_handler.handle(command)
@@ -121,7 +107,6 @@ class TestHandleTarget:
         fixed_rolls(monkeypatch, [3])
         command = RollCommand(
             specs=[("1d6", total_spec())],
-            message=None,
             target=Target(operator="<=", value=3),
         )
         result = command_handler.handle(command)
@@ -131,7 +116,6 @@ class TestHandleTarget:
         fixed_rolls(monkeypatch, [3])
         command = RollCommand(
             specs=[("1d6", total_spec())],
-            message=None,
             target=Target(operator="=", value=3),
         )
         result = command_handler.handle(command)
@@ -141,7 +125,6 @@ class TestHandleTarget:
         fixed_rolls(monkeypatch, [3])
         command = RollCommand(
             specs=[("1d6", total_spec())],
-            message=None,
             target=Target(operator="!=", value=4),
         )
         result = command_handler.handle(command)
@@ -151,7 +134,6 @@ class TestHandleTarget:
         fixed_rolls(monkeypatch, [3])
         command = RollCommand(
             specs=[("1d6", total_spec())],
-            message=None,
             target=Target(operator="!=", value=3),
         )
         result = command_handler.handle(command)
@@ -161,7 +143,6 @@ class TestHandleTarget:
         fixed_rolls(monkeypatch, [4, 2])
         command = RollCommand(
             specs=[("1d6", total_spec()), ("1d4", total_spec(sides=4))],
-            message=None,
             target=Target(operator=">=", value=6),
         )
         result = command_handler.handle(command)
@@ -174,7 +155,6 @@ class TestHandleTargetCritFumbleOverride:
         fixed_rolls(monkeypatch, [20])
         command = RollCommand(
             specs=[("1d20", total_spec(sides=20))],
-            message=None,
             target=Target(operator=">", value=100),
         )
         result = command_handler.handle(command)
@@ -184,7 +164,6 @@ class TestHandleTargetCritFumbleOverride:
         fixed_rolls(monkeypatch, [20])
         command = RollCommand(
             specs=[("1d20", total_spec(sides=20))],
-            message=None,
             target=Target(operator=">=", value=100),
         )
         result = command_handler.handle(command)
@@ -194,7 +173,6 @@ class TestHandleTargetCritFumbleOverride:
         fixed_rolls(monkeypatch, [1])
         command = RollCommand(
             specs=[("1d20", total_spec(sides=20, modifier=12))],
-            message=None,
             target=Target(operator=">", value=10),
         )
         result = command_handler.handle(command)
@@ -205,7 +183,6 @@ class TestHandleTargetCritFumbleOverride:
         fixed_rolls(monkeypatch, [1])
         command = RollCommand(
             specs=[("1d20", total_spec(sides=20))],
-            message=None,
             target=Target(operator="<", value=-100),
         )
         result = command_handler.handle(command)
@@ -215,7 +192,6 @@ class TestHandleTargetCritFumbleOverride:
         fixed_rolls(monkeypatch, [1])
         command = RollCommand(
             specs=[("1d20", total_spec(sides=20))],
-            message=None,
             target=Target(operator="<=", value=-100),
         )
         result = command_handler.handle(command)
@@ -225,7 +201,6 @@ class TestHandleTargetCritFumbleOverride:
         fixed_rolls(monkeypatch, [100])
         command = RollCommand(
             specs=[("1d100", total_spec(sides=100, modifier=-50))],
-            message=None,
             target=Target(operator="<=", value=30),
         )
         result = command_handler.handle(command)
@@ -236,7 +211,6 @@ class TestHandleTargetCritFumbleOverride:
         fixed_rolls(monkeypatch, [20])
         command = RollCommand(
             specs=[("1d20", total_spec(sides=20))],
-            message=None,
             target=Target(operator="=", value=20),
         )
         result = command_handler.handle(command)
@@ -246,7 +220,6 @@ class TestHandleTargetCritFumbleOverride:
         fixed_rolls(monkeypatch, [1])
         command = RollCommand(
             specs=[("1d20", total_spec(sides=20))],
-            message=None,
             target=Target(operator="=", value=1),
         )
         result = command_handler.handle(command)
@@ -256,7 +229,6 @@ class TestHandleTargetCritFumbleOverride:
         fixed_rolls(monkeypatch, [20])
         command = RollCommand(
             specs=[("1d20", total_spec(sides=20))],
-            message=None,
             target=Target(operator="!=", value=1),
         )
         result = command_handler.handle(command)
@@ -266,7 +238,6 @@ class TestHandleTargetCritFumbleOverride:
         fixed_rolls(monkeypatch, [1])
         command = RollCommand(
             specs=[("1d20", total_spec(sides=20))],
-            message=None,
             target=Target(operator="!=", value=1),
         )
         result = command_handler.handle(command)
@@ -279,7 +250,6 @@ class TestHandleTargetCritFumbleOverride:
                 ("1d20", total_spec(sides=20)),
                 ("2d6", total_spec(count=2, sides=6)),
             ],
-            message=None,
             target=Target(operator=">", value=100),
         )
         result = command_handler.handle(command)
@@ -296,7 +266,6 @@ class TestHandleTargetCritFumbleOverride:
                     total_spec(count=4, sides=6, keep_mode="highest", keep_n=1),
                 )
             ],
-            message=None,
             target=Target(operator=">", value=100),
         )
         result = command_handler.handle(command)
@@ -319,7 +288,6 @@ class TestHandleTargetCritFumbleOverride:
                     ),
                 )
             ],
-            message=None,
             target=Target(operator=">", value=10),
         )
         result = command_handler.handle(command)
@@ -342,7 +310,6 @@ class TestHandleTargetCritFumbleOverride:
                     ),
                 )
             ],
-            message=None,
             target=Target(operator=">", value=100),
         )
         result = command_handler.handle(command)

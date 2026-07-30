@@ -3,8 +3,14 @@
 import pytest
 
 from matrix_bot_roll import commands
-from matrix_bot_roll.commands import RollCommand, build_command
+from matrix_bot_roll.commands import ParsedRoll, RollCommand, build_command
 from matrix_bot_roll.messages import INVALID_ROLL, NO_PREVIOUS_ROLL, ROLL_HELP, USAGE
+
+
+def _roll(room_id, body):
+    """`build_command`, returning just the `RollCommand` (dropping verbose/message) or the error string."""
+    result = build_command(room_id, body)
+    return result if isinstance(result, str) else result.command
 
 
 class TestBuildCommandRoll:
@@ -25,28 +31,17 @@ class TestBuildCommandRoll:
         assert build_command("!room:example.org", "!r --help") == ROLL_HELP
 
     def test_single_expression_is_parsed(self):
-        result = build_command("!room:example.org", "!roll 1d6")
+        result = _roll("!room:example.org", "!roll 1d6")
         assert isinstance(result, RollCommand)
         assert [expr for expr, _ in result.specs] == ["1d6"]
-        assert result.message is None
 
     def test_multiple_expressions_are_parsed(self):
-        result = build_command("!room:example.org", "!roll 1d6 1d4+2")
+        result = _roll("!room:example.org", "!roll 1d6 1d4+2")
         assert isinstance(result, RollCommand)
         assert [expr for expr, _ in result.specs] == ["1d6", "1d4+2"]
 
-    def test_message_suffix_is_extracted(self):
-        result = build_command("!room:example.org", "!roll 1d6 | attack")
-        assert isinstance(result, RollCommand)
-        assert result.message == "attack"
-
-    def test_no_message_suffix_leaves_message_none(self):
-        result = build_command("!room:example.org", "!roll 1d6")
-        assert isinstance(result, RollCommand)
-        assert result.message is None
-
     def test_no_target_leaves_target_none(self):
-        result = build_command("!room:example.org", "!roll 1d6")
+        result = _roll("!room:example.org", "!roll 1d6")
         assert isinstance(result, RollCommand)
         assert result.target is None
 
@@ -87,9 +82,68 @@ class TestBuildCommandRoll:
     def test_expression_is_remembered_for_reroll(self):
         room_id = "!room:example.org"
         build_command(room_id, "!roll 1d6+4")
-        result = build_command(room_id, "!reroll")
+        result = _roll(room_id, "!reroll")
         assert isinstance(result, RollCommand)
         assert [expr for expr, _ in result.specs] == ["1d6+4"]
+
+
+class TestBuildCommandMessage:
+    def test_message_suffix_is_extracted(self):
+        parsed = build_command("!room:example.org", "!roll 1d6 | attack")
+        assert isinstance(parsed, ParsedRoll)
+        assert parsed.message == "attack"
+
+    def test_no_message_suffix_leaves_message_none(self):
+        parsed = build_command("!room:example.org", "!roll 1d6")
+        assert isinstance(parsed, ParsedRoll)
+        assert parsed.message is None
+
+    def test_target_and_message_coexist(self):
+        parsed = build_command("!room:example.org", "!roll 1d6 >15 | attack")
+        assert isinstance(parsed, ParsedRoll)
+        assert parsed.command.target is not None
+        assert parsed.command.target.value == 15
+        assert parsed.message == "attack"
+
+
+class TestBuildCommandVerbose:
+    def test_no_flag_defaults_to_terse(self):
+        parsed = build_command("!room:example.org", "!roll 1d6")
+        assert isinstance(parsed, ParsedRoll)
+        assert parsed.verbose is False
+
+    @pytest.mark.parametrize("flag", ["-v", "--verbose"])
+    def test_flag_after_expression_sets_verbose(self, flag):
+        parsed = build_command("!room:example.org", f"!roll 1d6 {flag}")
+        assert isinstance(parsed, ParsedRoll)
+        assert parsed.verbose is True
+        assert [expr for expr, _ in parsed.command.specs] == ["1d6"]
+
+    def test_flag_before_expression_sets_verbose(self):
+        parsed = build_command("!room:example.org", "!roll -v 1d6")
+        assert isinstance(parsed, ParsedRoll)
+        assert parsed.verbose is True
+        assert [expr for expr, _ in parsed.command.specs] == ["1d6"]
+
+    def test_flag_between_target_and_expression_sets_verbose(self):
+        parsed = build_command("!room:example.org", "!roll 1d6 -v >15")
+        assert isinstance(parsed, ParsedRoll)
+        assert parsed.verbose is True
+        assert parsed.command.target is not None
+        assert parsed.command.target.value == 15
+        assert [expr for expr, _ in parsed.command.specs] == ["1d6"]
+
+    def test_flag_survives_message_suffix(self):
+        parsed = build_command("!room:example.org", "!roll 1d6 -v | attack")
+        assert isinstance(parsed, ParsedRoll)
+        assert parsed.verbose is True
+        assert parsed.message == "attack"
+
+    def test_repeated_flag_is_harmless(self):
+        parsed = build_command("!room:example.org", "!roll 1d6 -v -v")
+        assert isinstance(parsed, ParsedRoll)
+        assert parsed.verbose is True
+        assert [expr for expr, _ in parsed.command.specs] == ["1d6"]
 
 
 class TestBuildCommandTarget:
@@ -98,39 +152,32 @@ class TestBuildCommandTarget:
         [">", "<", ">=", "<=", "=", "!="],
     )
     def test_each_operator_is_parsed(self, operator):
-        result = build_command("!room:example.org", f"!roll 1d6 {operator}15")
+        result = _roll("!room:example.org", f"!roll 1d6 {operator}15")
         assert isinstance(result, RollCommand)
         assert result.target is not None
         assert result.target.operator == operator
         assert result.target.value == 15
 
     def test_target_applies_to_whole_line_not_per_expression(self):
-        result = build_command("!room:example.org", "!roll 1d6 1d4 >15")
+        result = _roll("!room:example.org", "!roll 1d6 1d4 >15")
         assert isinstance(result, RollCommand)
         assert [expr for expr, _ in result.specs] == ["1d6", "1d4"]
         assert result.target is not None
         assert result.target.value == 15
 
     def test_negative_target_value_is_parsed(self):
-        result = build_command("!room:example.org", "!roll 1d20 >-5")
+        result = _roll("!room:example.org", "!roll 1d20 >-5")
         assert isinstance(result, RollCommand)
         assert result.target is not None
         assert result.target.operator == ">"
         assert result.target.value == -5
 
     def test_negative_target_value_is_parsed_for_not_equal(self):
-        result = build_command("!room:example.org", "!roll 1d20 !=-5")
+        result = _roll("!room:example.org", "!roll 1d20 !=-5")
         assert isinstance(result, RollCommand)
         assert result.target is not None
         assert result.target.operator == "!="
         assert result.target.value == -5
-
-    def test_target_and_message_coexist(self):
-        result = build_command("!room:example.org", "!roll 1d6 >15 | attack")
-        assert isinstance(result, RollCommand)
-        assert result.target is not None
-        assert result.target.value == 15
-        assert result.message == "attack"
 
     @pytest.mark.parametrize(
         "bad_target",
@@ -150,6 +197,10 @@ class TestBuildCommandTarget:
         result = build_command("!room:example.org", "!roll >15")
         assert result == INVALID_ROLL
 
+    def test_duplicate_target_rejects_whole_command(self):
+        result = build_command("!room:example.org", "!roll 1d6 >5 >10")
+        assert result == INVALID_ROLL
+
 
 class TestBuildCommandReroll:
     def test_no_previous_roll_returns_message(self):
@@ -161,7 +212,7 @@ class TestBuildCommandReroll:
     def test_repeats_last_roll_expression(self):
         room_id = "!other-room:example.org"
         build_command(room_id, "!roll 1d6")
-        result = build_command(room_id, "!rr")
+        result = _roll(room_id, "!rr")
         assert isinstance(result, RollCommand)
         assert [expr for expr, _ in result.specs] == ["1d6"]
 

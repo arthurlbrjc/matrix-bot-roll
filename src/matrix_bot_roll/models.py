@@ -55,10 +55,9 @@ class Target:
 
 @dataclass
 class RollResult:
-    """The aggregate outcome of rolling every expression in a `!roll` command."""
+    """The aggregate outcome of rolling every expression in a `!roll` command — the rolling domain only, with no display concerns."""
 
     rolls: List[Tuple[str, DiceRollResult]]
-    message: Optional[str]
     total: int
     target: Optional[Target]
     success: Optional[bool]

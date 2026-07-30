@@ -2,15 +2,18 @@
 
 USAGE = "\n".join(
     [
-        "• `!roll <expression> [expression ...] [target] [| message]` (or `!r`) — roll dice",
+        "• `!roll <expression> [expression ...] [target] [-v] [| message]` "
+        "(or `!r`) — roll dice",
         "• `!roll --help` — detailed roll syntax and examples",
         "• `!reroll` (or `!rr`) — repeat the last `!roll` expression in this room",
+        "• `!detail` (or `!d`) — show the full breakdown of the last roll in this room",
     ]
 )
 
 ROLL_HELP = "\n".join(
     [
-        "**!roll <expression> [expression ...] [target] [| message]** (alias: `!r`)",
+        "**!roll <expression> [expression ...] [target] [-v] [| message]** "
+        "(alias: `!r`)",
         "",
         "• `!roll d20` — roll one die",
         "• `!roll 4d6` — roll multiple dice",
@@ -24,11 +27,13 @@ ROLL_HELP = "\n".join(
         "• `!roll d20+5 >15` — compare the total against a target number "
         "(`>`, `<`, `>=`, `<=`, `=`, `!=`) for pass/fail",
         "• `!roll 3d8+4 | attack` — attach a message to the roll",
+        "• `!roll 4d6kh3 -v` (or `--verbose`) — show the full per-die breakdown "
+        "(terse by default); the flag can go anywhere in the command",
+        "• `!detail` (or `!d`) — re-show the last roll in this room with the "
+        "full breakdown, without rolling again",
     ]
 )
 
-NO_PREVIOUS_ROLL = (
-    "No previous roll to repeat in this room — use `!roll <expression>` first."
-)
+NO_PREVIOUS_ROLL = "No previous roll in this room — use `!roll <expression>` first."
 
 INVALID_ROLL = "Invalid roll expression — see `!roll --help` for syntax."

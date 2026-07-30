@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+from typing import Dict, Optional, Tuple
 
 from nio import AsyncClient, MatrixRoom, RoomMessageText
 
@@ -10,23 +11,44 @@ from matrix_bot_roll.formatting import format_detail, markdown_to_html
 from matrix_bot_roll.health_check import serve_health_check
 from matrix_bot_roll.logging_setup import configure_logging
 from matrix_bot_roll.matrix_client import run_client
+from matrix_bot_roll.messages import NO_PREVIOUS_ROLL
 from matrix_bot_roll.models import DiceRollResult, RollResult
 
 configure_logging()
 logger = logging.getLogger(__name__)
 logger.info("Starting bot", extra={"pid": os.getpid()})
 
+# The last `!roll`/`!reroll` result shown per room, for `!detail` to redisplay
+# without rolling again — display-only memory, kept out of the rolling domain
+# (`RollCommand`/`RollResult`/`command_handler`).
+_last_details: Dict[str, Tuple[RollResult, Optional[str]]] = {}
+
 
 async def message_callback(
     client: AsyncClient, room: MatrixRoom, event: RoomMessageText
 ):
     body = event.body.strip()
-    command = body.split(maxsplit=1)[0] if body else ""
-    if command not in ("!roll", "!r", "!reroll", "!rr"):
+    command_name = body.split(maxsplit=1)[0] if body else ""
+    if command_name not in ("!roll", "!r", "!reroll", "!rr", "!detail", "!d"):
         return
 
-    parsed = build_command(room.room_id, body)
-    reply = parsed if isinstance(parsed, str) else _format_result(handle(parsed))
+    if command_name in ("!detail", "!d"):
+        stored = _last_details.get(room.room_id)
+        if stored is None:
+            reply = NO_PREVIOUS_ROLL
+        else:
+            result, message = stored
+            reply = _format_result(result, verbose=True, message=message)
+    else:
+        parsed = build_command(room.room_id, body)
+        if isinstance(parsed, str):
+            reply = parsed
+        else:
+            result = handle(parsed.command)
+            _last_details[room.room_id] = (result, parsed.message)
+            reply = _format_result(
+                result, verbose=parsed.verbose, message=parsed.message
+            )
 
     content = {
         "msgtype": "m.text",
@@ -43,29 +65,39 @@ async def message_callback(
     )
 
 
-def _format_result(result: RollResult) -> str:
+def _format_result(result: RollResult, verbose: bool, message: Optional[str]) -> str:
     """
     Turn a RollResult into a human-readable string.
 
-    Also appends a grand total across all rolls if there's more than one (or a
-    target was given), the pass/fail marker if a target was given, and
-    the optional `message` attached to the roll, if any.
+    Each roll line shows only the expression, total, and crit/fumble marker
+    unless `verbose` is set, in which case it also shows the full per-die
+    breakdown. In terse mode, a single rolled expression compared to a target
+    is inlined onto that same line (e.g. '🎲 5d8 → **24** >20 → ✅ Success!');
+    otherwise (verbose, or more than one expression) the target instead gets
+    its own dedicated result line, since in verbose mode the roll line is
+    already busy with the per-die breakdown, and with more than one expression
+    the target isn't tied to any single roll. Also appends the optional
+    `message` attached to the roll, if any.
     """
-    lines = [_format_roll_line(expr, roll) for expr, roll in result.rolls]
+    inline_target = result.target is not None and len(result.rolls) == 1 and not verbose
+    if inline_target:
+        expr, roll = result.rolls[0]
+        lines = [_format_roll_line_with_target(expr, roll, result)]
+    else:
+        lines = [_format_roll_line(expr, roll, verbose) for expr, roll in result.rolls]
+        if result.target is not None:
+            lines.append(_format_target_line(result))
+        elif len(result.rolls) > 1:
+            lines.append(f"**Total: {result.total}**")
 
-    if result.target is not None:
-        lines.append(_format_target_line(result))
-    elif len(result.rolls) > 1:
-        lines.append(f"**Total: {result.total}**")
-
-    if result.message:
-        lines.append(f"💬 {result.message}")
+    if message:
+        lines.append(f"💬 {message}")
 
     return "\n".join(lines)
 
 
 def _format_target_line(result: RollResult) -> str:
-    """Render '**Total: X** vs <operator><value> → ✅/❌' for a roll that was compared to a target."""
+    """Render '**Total: X** vs <operator><value> → ✅/❌' as its own dedicated line."""
     assert result.target is not None
     marker = "✅ Success!" if result.success else "❌ Failure!"
     return (
@@ -74,14 +106,31 @@ def _format_target_line(result: RollResult) -> str:
     )
 
 
-def _format_roll_line(expr: str, roll: DiceRollResult) -> str:
-    """Render one '🎲 expr → detail = **total**' line, with a crit/fumble suffix if applicable."""
-    suffix = (
-        " 🎯 CRIT!"
-        if roll.crit == "crit"
-        else " 💥 FUMBLE!" if roll.crit == "fumble" else ""
+def _format_roll_line(expr: str, roll: DiceRollResult, verbose: bool) -> str:
+    """Render one '🎲 expr → **total**' line (or, if `verbose`, '🎲 expr → detail = **total**'), with a crit/fumble suffix if applicable."""
+    detail = f"{format_detail(roll)} = " if verbose else ""
+    return f"🎲 {expr} → {detail}**{roll.total}**{_crit_suffix(roll)}"
+
+
+def _format_roll_line_with_target(
+    expr: str, roll: DiceRollResult, result: RollResult
+) -> str:
+    """Render a single terse roll's line with its target comparison inlined, e.g. '🎲 5d8 → **24** >20 → ✅ Success!'."""
+    assert result.target is not None
+    marker = "✅ Success!" if result.success else "❌ Failure!"
+    return (
+        f"🎲 {expr} → **{roll.total}**{_crit_suffix(roll)} "
+        f"{result.target.operator}{result.target.value} → {marker}"
     )
-    return f"🎲 {expr} → {format_detail(roll)} = **{roll.total}**{suffix}"
+
+
+def _crit_suffix(roll: DiceRollResult) -> str:
+    """Render the trailing ' 🎯 CRIT!'/' 💥 FUMBLE!' marker for a roll, or '' if neither applies."""
+    if roll.crit == "crit":
+        return " 🎯 CRIT!"
+    if roll.crit == "fumble":
+        return " 💥 FUMBLE!"
+    return ""
 
 
 async def main():
