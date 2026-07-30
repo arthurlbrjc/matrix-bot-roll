@@ -21,9 +21,9 @@ DICE_WITH_DIE_MODIFIER_RE = re.compile(
 )
 
 # Matches a trailing target-number comparison for the whole line, e.g. '>15',
-# '>=8', '=10' — always the last space-separated token, applied to the summed
-# total across every dice expression on the line (see `_parse_command`).
-TARGET_RE = re.compile(r"^(>=|<=|>|<|=)(\d+)$")
+# '>=8', '=10', '!=3' — always the last space-separated token, applied to the
+# summed total across every dice expression on the line (see `_parse_command`).
+TARGET_RE = re.compile(r"^(>=|<=|!=|>|<|=)(-?\d+)$")
 
 _last_rolls: Dict[str, str] = {}
 

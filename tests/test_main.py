@@ -64,15 +64,25 @@ class TestRoll:
         assert "🎲 1d6" in output
 
     def test_target_success_shows_marker_and_total(self):
-        """1d6 is always > 0, so this deterministically succeeds."""
-        output = _send_body("!room:example.org", "!roll 1d6 >0")
+        """2d6 is always > 0, so this deterministically succeeds.
+
+        Two dice are always kept here, so no natural crit/fumble override can
+        apply (unlike `1d6`, which keeps a single die and could otherwise flip
+        the outcome on a roll of 1 or 6).
+        """
+        output = _send_body("!room:example.org", "!roll 2d6 >0")
         assert "**Total:" in output
         assert "✅" in output
         assert "❌" not in output
 
     def test_target_failure_shows_marker_and_total(self):
-        """1d6 can never exceed 100, so this deterministically fails."""
-        output = _send_body("!room:example.org", "!roll 1d6 >100")
+        """2d6 can never exceed 100, so this deterministically fails.
+
+        Two dice are always kept here, so no natural crit/fumble override can
+        apply (unlike `1d6`, which keeps a single die and could otherwise flip
+        the outcome on a roll of 1 or 6).
+        """
+        output = _send_body("!room:example.org", "!roll 2d6 >100")
         assert "**Total:" in output
         assert "❌" in output
         assert "✅" not in output

@@ -5,7 +5,7 @@ ModifierMode = Literal["total", "per_die"]
 KeepMode = Literal["highest", "lowest"]
 AdvDis = Literal["advantage", "disadvantage"]
 Crit = Literal["crit", "fumble"]
-TargetOperator = Literal[">", "<", ">=", "<=", "="]
+TargetOperator = Literal[">", "<", ">=", "<=", "=", "!="]
 
 
 @dataclass

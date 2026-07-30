@@ -95,7 +95,7 @@ class TestBuildCommandRoll:
 class TestBuildCommandTarget:
     @pytest.mark.parametrize(
         "operator",
-        [">", "<", ">=", "<=", "="],
+        [">", "<", ">=", "<=", "=", "!="],
     )
     def test_each_operator_is_parsed(self, operator):
         result = build_command("!room:example.org", f"!roll 1d6 {operator}15")
@@ -110,6 +110,20 @@ class TestBuildCommandTarget:
         assert [expr for expr, _ in result.specs] == ["1d6", "1d4"]
         assert result.target is not None
         assert result.target.value == 15
+
+    def test_negative_target_value_is_parsed(self):
+        result = build_command("!room:example.org", "!roll 1d20 >-5")
+        assert isinstance(result, RollCommand)
+        assert result.target is not None
+        assert result.target.operator == ">"
+        assert result.target.value == -5
+
+    def test_negative_target_value_is_parsed_for_not_equal(self):
+        result = build_command("!room:example.org", "!roll 1d20 !=-5")
+        assert isinstance(result, RollCommand)
+        assert result.target is not None
+        assert result.target.operator == "!="
+        assert result.target.value == -5
 
     def test_target_and_message_coexist(self):
         result = build_command("!room:example.org", "!roll 1d6 >15 | attack")

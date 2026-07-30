@@ -22,7 +22,7 @@ ROLL_HELP = "\n".join(
         "— per-die modifier and adv/dis/kh/kl",
         "• `!roll 2d6kh1+4 3(d10-2)adv` — combine everything",
         "• `!roll d20+5 >15` — compare the total against a target number "
-        "(`>`, `<`, `>=`, `<=`, `=`) for pass/fail",
+        "(`>`, `<`, `>=`, `<=`, `=`, `!=`) for pass/fail",
         "• `!roll 3d8+4 | attack` — attach a message to the roll",
     ]
 )
