@@ -5,7 +5,7 @@ USAGE = "\n".join(
         "• `!roll <expression> [expression ...] [target] [-v] [| message]` "
         "(or `!r`) — roll dice",
         "• `!roll --help` — detailed roll syntax and examples",
-        "• `!reroll [| message]` (or `!rr`) — repeat the last roll",
+        "• `!reroll [target] [| message]` (or `!rr`) — repeat the last roll",
         "• `!detail` (or `!d`) — show the full breakdown of the last roll in this room",
     ]
 )

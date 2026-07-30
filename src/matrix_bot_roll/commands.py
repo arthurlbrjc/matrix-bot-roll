@@ -84,10 +84,10 @@ def _build_roll_command(room_id: str, parts: List[str]) -> Union[ParsedRoll, str
 def _build_reroll_command(room_id: str, arg: Optional[str]) -> Union[ParsedRoll, str]:
     """
     Handle a `!reroll`/`!rr` message by re-parsing the last `!roll` expression in
-    this room. An optional `| message` suffix on the reroll itself replaces any
-    message the original roll had, and is remembered for subsequent bare
-    `!reroll`s in this room; without it, the original message (if any) is
-    replayed unchanged.
+    this room. An optional leading target (e.g. '>15') replaces the target the
+    original roll had; an optional `| message` suffix replaces its message. Both
+    are remembered for subsequent bare `!reroll`s in this room; whichever isn't
+    given is replayed unchanged from the original roll.
     """
     stored = _last_rolls.get(room_id)
     if stored is None:
@@ -95,16 +95,38 @@ def _build_reroll_command(room_id: str, arg: Optional[str]) -> Union[ParsedRoll,
     if not arg:
         return _parse_command(stored)
 
-    prefix, _, message = arg.partition("|")
-    if "|" not in arg or prefix.strip():
+    prefix, separator, message = arg.partition("|")
+    prefix = prefix.strip()
+    if prefix and _parse_target(prefix) is None:
         return INVALID_ROLL
 
-    dice_part = stored.partition("|")[0].strip()
-    new_arg = f"{dice_part} | {message}"
+    new_arg = _apply_reroll_overrides(stored, prefix or None, bool(separator), message)
     result = _parse_command(new_arg)
     if isinstance(result, ParsedRoll):
         _last_rolls[room_id] = new_arg
     return result
+
+
+def _apply_reroll_overrides(
+    stored: str, new_target_token: Optional[str], has_pipe: bool, message: str
+) -> str:
+    """Rebuild the stored roll string with an optional target override and/or message override applied."""
+    stored_dice_part, stored_separator, stored_message = stored.partition("|")
+    stored_tokens = stored_dice_part.split()
+    kept_tokens = [token for token in stored_tokens if _parse_target(token) is None]
+
+    target_token = new_target_token or next(
+        (token for token in stored_tokens if _parse_target(token) is not None), None
+    )
+    if target_token:
+        kept_tokens.append(target_token)
+    dice_part = " ".join(kept_tokens)
+
+    if has_pipe:
+        return f"{dice_part} | {message}"
+    if stored_separator:
+        return f"{dice_part} | {stored_message}"
+    return dice_part
 
 
 def _parse_command(arg: str) -> Union[ParsedRoll, str]:

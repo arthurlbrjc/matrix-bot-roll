@@ -5,6 +5,7 @@ import pytest
 from matrix_bot_roll import commands
 from matrix_bot_roll.commands import ParsedRoll, RollCommand, build_command
 from matrix_bot_roll.messages import INVALID_ROLL, NO_PREVIOUS_ROLL, ROLL_HELP, USAGE
+from matrix_bot_roll.models import Target
 
 
 def _roll(room_id, body):
@@ -290,6 +291,62 @@ class TestBuildCommandReroll:
         parsed = build_command(room_id, "!rr | flourish")
         assert isinstance(parsed, ParsedRoll)
         assert parsed.message == "flourish"
+
+    def test_reroll_without_target_replays_original_target(self):
+        room_id = "!reroll-target-room:example.org"
+        build_command(room_id, "!roll 1d20 >15")
+        parsed = build_command(room_id, "!reroll")
+        assert isinstance(parsed, ParsedRoll)
+        assert parsed.command.target == Target(operator=">", value=15)
+
+    def test_reroll_with_target_overrides_original_target(self):
+        room_id = "!reroll-target-room2:example.org"
+        build_command(room_id, "!roll 1d20 >15")
+        parsed = build_command(room_id, "!reroll >10")
+        assert isinstance(parsed, ParsedRoll)
+        assert parsed.command.target == Target(operator=">", value=10)
+        assert [expr for expr, _ in parsed.command.specs] == ["1d20"]
+
+    def test_reroll_with_target_on_originally_targetless_roll(self):
+        room_id = "!reroll-target-room3:example.org"
+        build_command(room_id, "!roll 1d20")
+        parsed = build_command(room_id, "!reroll >10")
+        assert isinstance(parsed, ParsedRoll)
+        assert parsed.command.target == Target(operator=">", value=10)
+
+    def test_reroll_with_target_and_message_overrides_both(self):
+        room_id = "!reroll-target-room4:example.org"
+        build_command(room_id, "!roll 1d20 >15 | attack")
+        parsed = build_command(room_id, "!reroll >10 | defend")
+        assert isinstance(parsed, ParsedRoll)
+        assert parsed.command.target == Target(operator=">", value=10)
+        assert parsed.message == "defend"
+
+    def test_reroll_target_persists_for_later_bare_reroll(self):
+        room_id = "!reroll-target-room5:example.org"
+        build_command(room_id, "!roll 1d20 >15")
+        build_command(room_id, "!reroll >10")
+        parsed = build_command(room_id, "!reroll")
+        assert isinstance(parsed, ParsedRoll)
+        assert parsed.command.target == Target(operator=">", value=10)
+
+    def test_reroll_with_invalid_target_is_invalid(self):
+        room_id = "!reroll-target-room6:example.org"
+        build_command(room_id, "!roll 1d20 >15")
+        assert build_command(room_id, "!reroll >bogus") == INVALID_ROLL
+
+    def test_reroll_with_duplicate_target_is_invalid(self):
+        room_id = "!reroll-target-room7:example.org"
+        build_command(room_id, "!roll 1d20 >15")
+        assert build_command(room_id, "!reroll >10 >20") == INVALID_ROLL
+
+    def test_invalid_reroll_target_does_not_overwrite_remembered_roll(self):
+        room_id = "!reroll-target-room8:example.org"
+        build_command(room_id, "!roll 1d20 >15")
+        build_command(room_id, "!reroll >bogus")
+        parsed = build_command(room_id, "!reroll")
+        assert isinstance(parsed, ParsedRoll)
+        assert parsed.command.target == Target(operator=">", value=15)
 
 
 class TestParseExpr:
