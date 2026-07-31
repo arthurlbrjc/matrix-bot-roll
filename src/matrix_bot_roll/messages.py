@@ -1,5 +1,10 @@
 """User-facing reply strings sent back to Matrix rooms."""
 
+from matrix_bot_roll.constants import (
+    MAX_PATTERN_NAME_LENGTH,
+    MAX_SAVED_PATTERNS_PER_USER,
+)
+
 USAGE = "\n".join(
     [
         "• `!roll <expression> [expression ...] [target] [-v] [| message]` "
@@ -39,8 +44,38 @@ NO_PREVIOUS_ROLL = "No previous roll in this room — use `!roll <expression>` f
 
 INVALID_ROLL = "Invalid roll expression — see `!roll --help` for syntax."
 
+SAVE_USAGE = (
+    "Usage: `!save <name> <expression> [target] [-v] [| message]` (or `!s`) "
+    "— e.g. `!save attack 3d8+4`."
+)
+
 
 def invalid_expr(expr: str, detail: str) -> str:
     """Build a per-expression invalid-roll error naming the offending token and why it failed."""
     safe_expr = expr.replace("`", "'")  # backticks would break the Markdown code span
     return f"Invalid roll `{safe_expr}` — {detail}. See `!roll --help` for syntax."
+
+
+def invalid_pattern_name(name: str) -> str:
+    """Build an error naming why `name` isn't a legal `!save` pattern name."""
+    safe_name = name.replace("`", "'")  # backticks would break the Markdown code span
+    return (
+        f"Invalid pattern name `{safe_name}` — must start with a lowercase letter "
+        f"and contain only lowercase letters, `_`, or `-` (no digits, so it can't "
+        f"collide with dice notation like `d20`), max {MAX_PATTERN_NAME_LENGTH} "
+        f"characters."
+    )
+
+
+def pattern_saved(name: str, expr: str) -> str:
+    """Build a confirmation reply for a successful `!save`."""
+    safe_expr = expr.replace("`", "'")  # backticks would break the Markdown code span
+    return f"✅ Saved `{name}` = `{safe_expr}`."
+
+
+def pattern_save_limit_reached(name: str) -> str:
+    """Build an error reply for a `!save` rejected by the per-user cap."""
+    return (
+        f"Can't save `{name}` — you already have the maximum of "
+        f"{MAX_SAVED_PATTERNS_PER_USER} saved patterns."
+    )

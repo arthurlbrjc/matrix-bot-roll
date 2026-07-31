@@ -1,9 +1,10 @@
-"""Unit tests for the `!roll`/`!reroll` message handling in main.py."""
+"""Unit tests for the `!roll`/`!reroll`/`!save` message handling in main.py."""
 
 import asyncio
+import json
 import os
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 os.environ.setdefault("MATRIX_BASE_URL", "https://example.invalid")
 os.environ.setdefault("MATRIX_USER_ID", "@bot:example.invalid")
@@ -11,12 +12,17 @@ os.environ.setdefault("MATRIX_PASSWORD", "unused-test-password")
 os.environ.setdefault("MATRIX_DEVICE_NAME", "matrix-bot-roll-test")
 os.environ.setdefault("MATRIX_STORE_PATH", "/tmp/matrix-bot-roll-test-store")
 
+from matrix_bot_roll.constants import MAX_SAVED_PATTERNS_PER_USER  # noqa: E402
 from matrix_bot_roll.main import message_callback  # noqa: E402
 from matrix_bot_roll.messages import (  # noqa: E402
     NO_PREVIOUS_ROLL,
     ROLL_HELP,
+    SAVE_USAGE,
     USAGE,
     invalid_expr,
+    invalid_pattern_name,
+    pattern_save_limit_reached,
+    pattern_saved,
 )
 
 
@@ -25,6 +31,50 @@ def _send_body(room_id: str, body: str) -> str | None:
     client = AsyncMock()
     room = SimpleNamespace(room_id=room_id)
     event = SimpleNamespace(body=body)
+    asyncio.run(message_callback(client, room, event))
+    if not client.room_send.called:
+        return None
+    return client.room_send.call_args.kwargs["content"]["body"]
+
+
+def _fake_matrix_client(initial_blob=None):
+    """
+    A fake `AsyncClient` whose `send` serves GET/PUT against an in-memory
+    account-data blob, mimicking the real `/user/{id}/account_data/{type}`
+    endpoint (see tests/test_saved_patterns.py's `fake_client`) — needed for
+    `!save`, which persists via `saved_patterns.save_pattern`.
+    """
+    store = {"data": initial_blob}
+
+    async def send(method, path, data=None, headers=None):
+        response = MagicMock()
+        if method == "GET":
+            if store["data"] is None:
+                response.status = 404
+            else:
+                response.status = 200
+                response.json = AsyncMock(return_value=store["data"])
+            response.raise_for_status = MagicMock()
+        else:
+            store["data"] = json.loads(data)
+            response.status = 200
+            response.raise_for_status = MagicMock()
+        return response
+
+    client = AsyncMock()
+    client.user_id = "@bot:example.invalid"
+    client.access_token = "test-token"
+    client.send = AsyncMock(side_effect=send)
+    return client, store
+
+
+def _send_save_body(room_id, body, sender="@alice:example.invalid", client=None):
+    """Like `_send_body`, but for `!save`: uses `_fake_matrix_client` (roll/reroll/
+    detail don't need account-data I/O, so `_send_body` stays a plain `AsyncMock`)."""
+    if client is None:
+        client, _ = _fake_matrix_client()
+    room = SimpleNamespace(room_id=room_id)
+    event = SimpleNamespace(body=body, sender=sender)
     asyncio.run(message_callback(client, room, event))
     if not client.room_send.called:
         return None
@@ -186,6 +236,75 @@ class TestReroll:
         room_id = "!reroll-not-swallowed:example.org"
         assert "1d6" in _send_body(room_id, "!roll 1d6")
         assert _send_body(room_id, "!reroll") != USAGE
+
+
+class TestSave:
+    def test_bare_save_returns_usage(self):
+        assert _send_save_body("!room:example.org", "!save") == SAVE_USAGE
+
+    def test_save_with_only_a_name_returns_usage(self):
+        assert _send_save_body("!room:example.org", "!save attack") == SAVE_USAGE
+
+    def test_s_alias_saves(self):
+        output = _send_save_body("!room:example.org", "!s attack 3d8+4")
+        assert output == pattern_saved("attack", "3d8+4")
+
+    def test_valid_save_confirms(self):
+        output = _send_save_body("!room:example.org", "!save attack 3d8+4")
+        assert output == pattern_saved("attack", "3d8+4")
+
+    def test_invalid_name_returns_error(self):
+        output = _send_save_body("!room:example.org", "!save 1attack 3d8+4")
+        assert output == invalid_pattern_name("1attack")
+
+    def test_invalid_expression_returns_error(self):
+        output = _send_save_body("!room:example.org", "!save attack bogus")
+        assert output == invalid_expr("bogus", "not a recognized dice expression")
+
+    def test_save_persists_under_the_sender(self):
+        client, store = _fake_matrix_client()
+        _send_save_body(
+            "!room:example.org",
+            "!save attack 3d8+4",
+            sender="@alice:example.invalid",
+            client=client,
+        )
+        patterns = store["data"]["users"]["@alice:example.invalid"]
+        assert patterns == {"attack": "3d8+4"}
+
+    def test_different_senders_do_not_share_patterns(self):
+        client, store = _fake_matrix_client()
+        _send_save_body(
+            "!room:example.org",
+            "!save attack 3d8+4",
+            sender="@alice:example.invalid",
+            client=client,
+        )
+        _send_save_body(
+            "!room:example.org",
+            "!save attack 1d20+7",
+            sender="@bob:example.invalid",
+            client=client,
+        )
+        assert store["data"]["users"]["@alice:example.invalid"] == {"attack": "3d8+4"}
+        assert store["data"]["users"]["@bob:example.invalid"] == {"attack": "1d20+7"}
+
+    def test_save_rejected_past_the_cap_returns_limit_message(self):
+        initial_blob = {
+            "users": {
+                "@alice:example.invalid": {
+                    f"pattern{i}": "1d20" for i in range(MAX_SAVED_PATTERNS_PER_USER)
+                }
+            }
+        }
+        client, _ = _fake_matrix_client(initial_blob=initial_blob)
+        output = _send_save_body(
+            "!room:example.org",
+            "!save one-too-many 1d20",
+            sender="@alice:example.invalid",
+            client=client,
+        )
+        assert output == pattern_save_limit_reached("one-too-many")
 
 
 class TestMessageCallbackDispatch:

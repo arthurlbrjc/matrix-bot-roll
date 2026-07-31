@@ -5,13 +5,18 @@ from typing import Dict, Optional, Tuple
 
 from nio import AsyncClient, MatrixRoom, RoomMessageText
 
+from matrix_bot_roll import saved_patterns
 from matrix_bot_roll.command_handler import handle
-from matrix_bot_roll.commands import build_command
+from matrix_bot_roll.commands import build_dice_command, build_save_command
 from matrix_bot_roll.formatting import format_detail, markdown_to_html
 from matrix_bot_roll.health_check import serve_health_check
 from matrix_bot_roll.logging_setup import configure_logging
 from matrix_bot_roll.matrix_client import run_client
-from matrix_bot_roll.messages import NO_PREVIOUS_ROLL
+from matrix_bot_roll.messages import (
+    NO_PREVIOUS_ROLL,
+    pattern_save_limit_reached,
+    pattern_saved,
+)
 from matrix_bot_roll.models import DiceRollResult, RollResult
 
 configure_logging()
@@ -23,24 +28,33 @@ logger.info("Starting bot", extra={"pid": os.getpid()})
 # (`RollCommand`/`RollResult`/`command_handler`).
 _last_details: Dict[str, Tuple[RollResult, Optional[str]]] = {}
 
+# Every command family's recognized aliases, so adding a new alias is a
+# one-line change here rather than touching both the guard clause below and
+# its dispatch branch separately.
+_ROLL_ALIASES = ("!roll", "!r", "!reroll", "!rr")
+_DETAIL_ALIASES = ("!detail", "!d")
+_SAVE_ALIASES = ("!save", "!s")
+
 
 async def message_callback(
     client: AsyncClient, room: MatrixRoom, event: RoomMessageText
 ):
     body = event.body.strip()
     command_name = body.split(maxsplit=1)[0] if body else ""
-    if command_name not in ("!roll", "!r", "!reroll", "!rr", "!detail", "!d"):
+    if command_name not in (*_ROLL_ALIASES, *_DETAIL_ALIASES, *_SAVE_ALIASES):
         return
 
-    if command_name in ("!detail", "!d"):
+    if command_name in _DETAIL_ALIASES:
         stored = _last_details.get(room.room_id)
         if stored is None:
             reply = NO_PREVIOUS_ROLL
         else:
             result, message = stored
             reply = _format_result(result, verbose=True, message=message)
+    elif command_name in _SAVE_ALIASES:
+        reply = await _handle_save(client, event.sender, body)
     else:
-        parsed = build_command(room.room_id, body)
+        parsed = build_dice_command(room.room_id, body)
         if isinstance(parsed, str):
             reply = parsed
         else:
@@ -63,6 +77,18 @@ async def message_callback(
         content=content,
         ignore_unverified_devices=True,
     )
+
+
+async def _handle_save(client: AsyncClient, user_id: str, body: str) -> str:
+    """Parse and persist a `!save` command, returning the reply text."""
+    parsed = build_save_command(body)
+    if isinstance(parsed, str):
+        return parsed
+
+    saved = await saved_patterns.save_pattern(client, user_id, parsed.name, parsed.expr)
+    if not saved:
+        return pattern_save_limit_reached(parsed.name)
+    return pattern_saved(parsed.name, parsed.expr)
 
 
 def _format_result(result: RollResult, verbose: bool, message: Optional[str]) -> str:

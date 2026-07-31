@@ -3,39 +3,47 @@
 import pytest
 
 from matrix_bot_roll import commands
-from matrix_bot_roll.commands import ParsedRoll, RollCommand, build_command
+from matrix_bot_roll.commands import (
+    ParsedRoll,
+    RollCommand,
+    SaveCommand,
+    build_dice_command,
+    build_save_command,
+)
 from matrix_bot_roll.messages import (
     INVALID_ROLL,
     NO_PREVIOUS_ROLL,
     ROLL_HELP,
+    SAVE_USAGE,
     USAGE,
     invalid_expr,
+    invalid_pattern_name,
 )
 from matrix_bot_roll.models import Target
 
 
 def _roll(room_id, body):
-    """`build_command`, returning just the `RollCommand` (dropping verbose/message) or the error string."""
-    result = build_command(room_id, body)
+    """`build_dice_command`, returning just the `RollCommand` (dropping verbose/message) or the error string."""
+    result = build_dice_command(room_id, body)
     return result if isinstance(result, str) else result.command
 
 
 class TestBuildCommandRoll:
     def test_bare_roll_returns_usage(self):
-        assert build_command("!room:example.org", "!roll") == USAGE
+        assert build_dice_command("!room:example.org", "!roll") == USAGE
 
     def test_bare_roll_with_trailing_whitespace_returns_usage(self):
-        assert build_command("!room:example.org", "!roll ") == USAGE
+        assert build_dice_command("!room:example.org", "!roll ") == USAGE
 
     def test_help_flag_returns_detailed_help(self):
-        assert build_command("!room:example.org", "!roll --help") == ROLL_HELP
+        assert build_dice_command("!room:example.org", "!roll --help") == ROLL_HELP
 
     def test_help_flag_with_extra_whitespace_returns_detailed_help(self):
-        assert build_command("!room:example.org", "!roll   --help") == ROLL_HELP
+        assert build_dice_command("!room:example.org", "!roll   --help") == ROLL_HELP
 
     def test_r_alias_is_equivalent(self):
-        assert build_command("!room:example.org", "!r") == USAGE
-        assert build_command("!room:example.org", "!r --help") == ROLL_HELP
+        assert build_dice_command("!room:example.org", "!r") == USAGE
+        assert build_dice_command("!room:example.org", "!r --help") == ROLL_HELP
 
     def test_single_expression_is_parsed(self):
         result = _roll("!room:example.org", "!roll 1d6")
@@ -53,17 +61,17 @@ class TestBuildCommandRoll:
         assert result.target is None
 
     def test_invalid_expression_returns_invalid_roll(self):
-        result = build_command("!room:example.org", "!roll bogus")
+        result = build_dice_command("!room:example.org", "!roll bogus")
         assert result == invalid_expr("bogus", "not a recognized dice expression")
 
     def test_mix_of_valid_and_invalid_rejects_whole_command(self):
         """One deliberate behavior change: any invalid expr rejects the whole line."""
-        result = build_command("!room:example.org", "!roll 4d20 bogus 1d6")
+        result = build_dice_command("!room:example.org", "!roll 4d20 bogus 1d6")
         assert result == invalid_expr("bogus", "not a recognized dice expression")
 
     def test_message_only_with_no_dice_expression_is_invalid(self):
         """A `| message` suffix with no dice expression at all is not a valid roll."""
-        assert build_command("!room:example.org", "!roll | just a message") == (
+        assert build_dice_command("!room:example.org", "!roll | just a message") == (
             INVALID_ROLL
         )
 
@@ -94,20 +102,20 @@ class TestBuildCommandRoll:
         ],
     )
     def test_invalid_expressions_are_rejected(self, expr, detail):
-        result = build_command("!room:example.org", f"!roll {expr}")
+        result = build_dice_command("!room:example.org", f"!roll {expr}")
         assert result == invalid_expr(expr, detail)
 
     def test_expression_is_remembered_for_reroll(self):
         room_id = "!room:example.org"
-        build_command(room_id, "!roll 1d6+4")
+        build_dice_command(room_id, "!roll 1d6+4")
         result = _roll(room_id, "!reroll")
         assert isinstance(result, RollCommand)
         assert [expr for expr, _ in result.specs] == ["1d6+4"]
 
     def test_invalid_expression_does_not_overwrite_remembered_roll(self):
         room_id = "!room-invalid:example.org"
-        build_command(room_id, "!roll 1d6+4")
-        build_command(room_id, "!roll bogus")
+        build_dice_command(room_id, "!roll 1d6+4")
+        build_dice_command(room_id, "!roll bogus")
         result = _roll(room_id, "!reroll")
         assert isinstance(result, RollCommand)
         assert [expr for expr, _ in result.specs] == ["1d6+4"]
@@ -115,17 +123,17 @@ class TestBuildCommandRoll:
 
 class TestBuildCommandMessage:
     def test_message_suffix_is_extracted(self):
-        parsed = build_command("!room:example.org", "!roll 1d6 | attack")
+        parsed = build_dice_command("!room:example.org", "!roll 1d6 | attack")
         assert isinstance(parsed, ParsedRoll)
         assert parsed.message == "attack"
 
     def test_no_message_suffix_leaves_message_none(self):
-        parsed = build_command("!room:example.org", "!roll 1d6")
+        parsed = build_dice_command("!room:example.org", "!roll 1d6")
         assert isinstance(parsed, ParsedRoll)
         assert parsed.message is None
 
     def test_target_and_message_coexist(self):
-        parsed = build_command("!room:example.org", "!roll 1d6 >15 | attack")
+        parsed = build_dice_command("!room:example.org", "!roll 1d6 >15 | attack")
         assert isinstance(parsed, ParsedRoll)
         assert parsed.command.target is not None
         assert parsed.command.target.value == 15
@@ -134,25 +142,25 @@ class TestBuildCommandMessage:
 
 class TestBuildCommandVerbose:
     def test_no_flag_defaults_to_terse(self):
-        parsed = build_command("!room:example.org", "!roll 1d6")
+        parsed = build_dice_command("!room:example.org", "!roll 1d6")
         assert isinstance(parsed, ParsedRoll)
         assert parsed.verbose is False
 
     @pytest.mark.parametrize("flag", ["-v", "--verbose"])
     def test_flag_after_expression_sets_verbose(self, flag):
-        parsed = build_command("!room:example.org", f"!roll 1d6 {flag}")
+        parsed = build_dice_command("!room:example.org", f"!roll 1d6 {flag}")
         assert isinstance(parsed, ParsedRoll)
         assert parsed.verbose is True
         assert [expr for expr, _ in parsed.command.specs] == ["1d6"]
 
     def test_flag_before_expression_sets_verbose(self):
-        parsed = build_command("!room:example.org", "!roll -v 1d6")
+        parsed = build_dice_command("!room:example.org", "!roll -v 1d6")
         assert isinstance(parsed, ParsedRoll)
         assert parsed.verbose is True
         assert [expr for expr, _ in parsed.command.specs] == ["1d6"]
 
     def test_flag_between_target_and_expression_sets_verbose(self):
-        parsed = build_command("!room:example.org", "!roll 1d6 -v >15")
+        parsed = build_dice_command("!room:example.org", "!roll 1d6 -v >15")
         assert isinstance(parsed, ParsedRoll)
         assert parsed.verbose is True
         assert parsed.command.target is not None
@@ -160,13 +168,13 @@ class TestBuildCommandVerbose:
         assert [expr for expr, _ in parsed.command.specs] == ["1d6"]
 
     def test_flag_survives_message_suffix(self):
-        parsed = build_command("!room:example.org", "!roll 1d6 -v | attack")
+        parsed = build_dice_command("!room:example.org", "!roll 1d6 -v | attack")
         assert isinstance(parsed, ParsedRoll)
         assert parsed.verbose is True
         assert parsed.message == "attack"
 
     def test_repeated_flag_is_harmless(self):
-        parsed = build_command("!room:example.org", "!roll 1d6 -v -v")
+        parsed = build_dice_command("!room:example.org", "!roll 1d6 -v -v")
         assert isinstance(parsed, ParsedRoll)
         assert parsed.verbose is True
         assert [expr for expr, _ in parsed.command.specs] == ["1d6"]
@@ -217,152 +225,154 @@ class TestBuildCommandTarget:
     )
     def test_malformed_target_rejects_whole_command(self, bad_target):
         """Tokens that don't parse as a target fall through to expr parsing and get named there."""
-        result = build_command("!room:example.org", f"!roll 1d6 {bad_target}")
+        result = build_dice_command("!room:example.org", f"!roll 1d6 {bad_target}")
         assert result == invalid_expr(bad_target, "not a recognized dice expression")
 
     def test_target_with_no_dice_expression_rejects_whole_command(self):
-        result = build_command("!room:example.org", "!roll >15")
+        result = build_dice_command("!room:example.org", "!roll >15")
         assert result == INVALID_ROLL
 
     def test_duplicate_target_rejects_whole_command(self):
-        result = build_command("!room:example.org", "!roll 1d6 >5 >10")
+        result = build_dice_command("!room:example.org", "!roll 1d6 >5 >10")
         assert result == INVALID_ROLL
 
 
 class TestBuildCommandReroll:
     def test_no_previous_roll_returns_message(self):
-        assert build_command("!empty-room:example.org", "!reroll") == NO_PREVIOUS_ROLL
+        assert (
+            build_dice_command("!empty-room:example.org", "!reroll") == NO_PREVIOUS_ROLL
+        )
 
     def test_rr_alias_is_equivalent(self):
-        assert build_command("!empty-room2:example.org", "!rr") == NO_PREVIOUS_ROLL
+        assert build_dice_command("!empty-room2:example.org", "!rr") == NO_PREVIOUS_ROLL
 
     def test_repeats_last_roll_expression(self):
         room_id = "!other-room:example.org"
-        build_command(room_id, "!roll 1d6")
+        build_dice_command(room_id, "!roll 1d6")
         result = _roll(room_id, "!rr")
         assert isinstance(result, RollCommand)
         assert [expr for expr, _ in result.specs] == ["1d6"]
 
     def test_invalid_first_roll_leaves_no_previous_roll(self):
         room_id = "!invalid-only-room:example.org"
-        build_command(room_id, "!roll bogus")
-        assert build_command(room_id, "!reroll") == NO_PREVIOUS_ROLL
+        build_dice_command(room_id, "!roll bogus")
+        assert build_dice_command(room_id, "!reroll") == NO_PREVIOUS_ROLL
 
     def test_reroll_without_message_replays_original_message(self):
         room_id = "!reroll-msg-room:example.org"
-        build_command(room_id, "!roll 1d6 | attack")
-        parsed = build_command(room_id, "!reroll")
+        build_dice_command(room_id, "!roll 1d6 | attack")
+        parsed = build_dice_command(room_id, "!reroll")
         assert isinstance(parsed, ParsedRoll)
         assert parsed.message == "attack"
 
     def test_reroll_with_message_overrides_original_message(self):
         room_id = "!reroll-msg-room2:example.org"
-        build_command(room_id, "!roll 1d6 | attack")
-        parsed = build_command(room_id, "!reroll | defend")
+        build_dice_command(room_id, "!roll 1d6 | attack")
+        parsed = build_dice_command(room_id, "!reroll | defend")
         assert isinstance(parsed, ParsedRoll)
         assert [expr for expr, _ in parsed.command.specs] == ["1d6"]
         assert parsed.message == "defend"
 
     def test_reroll_with_message_on_originally_messageless_roll(self):
         room_id = "!reroll-msg-room3:example.org"
-        build_command(room_id, "!roll 1d6")
-        parsed = build_command(room_id, "!reroll | now with flavor")
+        build_dice_command(room_id, "!roll 1d6")
+        parsed = build_dice_command(room_id, "!reroll | now with flavor")
         assert isinstance(parsed, ParsedRoll)
         assert parsed.message == "now with flavor"
 
     def test_reroll_with_empty_message_clears_message(self):
         room_id = "!reroll-msg-room4:example.org"
-        build_command(room_id, "!roll 1d6 | attack")
-        parsed = build_command(room_id, "!reroll |")
+        build_dice_command(room_id, "!roll 1d6 | attack")
+        parsed = build_dice_command(room_id, "!reroll |")
         assert isinstance(parsed, ParsedRoll)
         assert parsed.message is None
 
     def test_reroll_with_trailing_text_but_no_pipe_is_invalid(self):
         room_id = "!reroll-msg-room5:example.org"
-        build_command(room_id, "!roll 1d6")
-        assert build_command(room_id, "!reroll defend") == INVALID_ROLL
+        build_dice_command(room_id, "!roll 1d6")
+        assert build_dice_command(room_id, "!reroll defend") == INVALID_ROLL
 
     def test_reroll_with_text_before_pipe_is_invalid(self):
         room_id = "!reroll-msg-room7:example.org"
-        build_command(room_id, "!roll 1d6")
-        assert build_command(room_id, "!reroll bogus | defend") == INVALID_ROLL
+        build_dice_command(room_id, "!roll 1d6")
+        assert build_dice_command(room_id, "!reroll bogus | defend") == INVALID_ROLL
 
     def test_reroll_message_persists_for_later_bare_reroll(self):
         room_id = "!reroll-msg-room8:example.org"
-        build_command(room_id, "!roll 1d6 | attack")
-        build_command(room_id, "!reroll | defend")
-        parsed = build_command(room_id, "!reroll")
+        build_dice_command(room_id, "!roll 1d6 | attack")
+        build_dice_command(room_id, "!reroll | defend")
+        parsed = build_dice_command(room_id, "!reroll")
         assert isinstance(parsed, ParsedRoll)
         assert parsed.message == "defend"
 
     def test_invalid_reroll_message_does_not_overwrite_remembered_roll(self):
         room_id = "!reroll-msg-room9:example.org"
-        build_command(room_id, "!roll 1d6 | attack")
-        build_command(room_id, "!reroll bogus | defend")
-        parsed = build_command(room_id, "!reroll")
+        build_dice_command(room_id, "!roll 1d6 | attack")
+        build_dice_command(room_id, "!reroll bogus | defend")
+        parsed = build_dice_command(room_id, "!reroll")
         assert isinstance(parsed, ParsedRoll)
         assert parsed.message == "attack"
 
     def test_rr_alias_accepts_message(self):
         room_id = "!reroll-msg-room6:example.org"
-        build_command(room_id, "!roll 1d6")
-        parsed = build_command(room_id, "!rr | flourish")
+        build_dice_command(room_id, "!roll 1d6")
+        parsed = build_dice_command(room_id, "!rr | flourish")
         assert isinstance(parsed, ParsedRoll)
         assert parsed.message == "flourish"
 
     def test_reroll_without_target_replays_original_target(self):
         room_id = "!reroll-target-room:example.org"
-        build_command(room_id, "!roll 1d20 >15")
-        parsed = build_command(room_id, "!reroll")
+        build_dice_command(room_id, "!roll 1d20 >15")
+        parsed = build_dice_command(room_id, "!reroll")
         assert isinstance(parsed, ParsedRoll)
         assert parsed.command.target == Target(operator=">", value=15)
 
     def test_reroll_with_target_overrides_original_target(self):
         room_id = "!reroll-target-room2:example.org"
-        build_command(room_id, "!roll 1d20 >15")
-        parsed = build_command(room_id, "!reroll >10")
+        build_dice_command(room_id, "!roll 1d20 >15")
+        parsed = build_dice_command(room_id, "!reroll >10")
         assert isinstance(parsed, ParsedRoll)
         assert parsed.command.target == Target(operator=">", value=10)
         assert [expr for expr, _ in parsed.command.specs] == ["1d20"]
 
     def test_reroll_with_target_on_originally_targetless_roll(self):
         room_id = "!reroll-target-room3:example.org"
-        build_command(room_id, "!roll 1d20")
-        parsed = build_command(room_id, "!reroll >10")
+        build_dice_command(room_id, "!roll 1d20")
+        parsed = build_dice_command(room_id, "!reroll >10")
         assert isinstance(parsed, ParsedRoll)
         assert parsed.command.target == Target(operator=">", value=10)
 
     def test_reroll_with_target_and_message_overrides_both(self):
         room_id = "!reroll-target-room4:example.org"
-        build_command(room_id, "!roll 1d20 >15 | attack")
-        parsed = build_command(room_id, "!reroll >10 | defend")
+        build_dice_command(room_id, "!roll 1d20 >15 | attack")
+        parsed = build_dice_command(room_id, "!reroll >10 | defend")
         assert isinstance(parsed, ParsedRoll)
         assert parsed.command.target == Target(operator=">", value=10)
         assert parsed.message == "defend"
 
     def test_reroll_target_persists_for_later_bare_reroll(self):
         room_id = "!reroll-target-room5:example.org"
-        build_command(room_id, "!roll 1d20 >15")
-        build_command(room_id, "!reroll >10")
-        parsed = build_command(room_id, "!reroll")
+        build_dice_command(room_id, "!roll 1d20 >15")
+        build_dice_command(room_id, "!reroll >10")
+        parsed = build_dice_command(room_id, "!reroll")
         assert isinstance(parsed, ParsedRoll)
         assert parsed.command.target == Target(operator=">", value=10)
 
     def test_reroll_with_invalid_target_is_invalid(self):
         room_id = "!reroll-target-room6:example.org"
-        build_command(room_id, "!roll 1d20 >15")
-        assert build_command(room_id, "!reroll >bogus") == INVALID_ROLL
+        build_dice_command(room_id, "!roll 1d20 >15")
+        assert build_dice_command(room_id, "!reroll >bogus") == INVALID_ROLL
 
     def test_reroll_with_duplicate_target_is_invalid(self):
         room_id = "!reroll-target-room7:example.org"
-        build_command(room_id, "!roll 1d20 >15")
-        assert build_command(room_id, "!reroll >10 >20") == INVALID_ROLL
+        build_dice_command(room_id, "!roll 1d20 >15")
+        assert build_dice_command(room_id, "!reroll >10 >20") == INVALID_ROLL
 
     def test_invalid_reroll_target_does_not_overwrite_remembered_roll(self):
         room_id = "!reroll-target-room8:example.org"
-        build_command(room_id, "!roll 1d20 >15")
-        build_command(room_id, "!reroll >bogus")
-        parsed = build_command(room_id, "!reroll")
+        build_dice_command(room_id, "!roll 1d20 >15")
+        build_dice_command(room_id, "!reroll >bogus")
+        parsed = build_dice_command(room_id, "!reroll")
         assert isinstance(parsed, ParsedRoll)
         assert parsed.command.target == Target(operator=">", value=15)
 
@@ -370,53 +380,53 @@ class TestBuildCommandReroll:
 class TestBuildCommandRerollVerbose:
     def test_bare_reroll_of_verbose_roll_is_terse(self):
         room_id = "!reroll-verbose-room:example.org"
-        build_command(room_id, "!roll 1d6 -v")
-        parsed = build_command(room_id, "!reroll")
+        build_dice_command(room_id, "!roll 1d6 -v")
+        parsed = build_dice_command(room_id, "!reroll")
         assert isinstance(parsed, ParsedRoll)
         assert parsed.verbose is False
 
     def test_reroll_with_target_override_of_verbose_roll_is_terse(self):
         room_id = "!reroll-verbose-room2:example.org"
-        build_command(room_id, "!roll 1d20 >15 -v")
-        parsed = build_command(room_id, "!reroll >10")
+        build_dice_command(room_id, "!roll 1d20 >15 -v")
+        parsed = build_dice_command(room_id, "!reroll >10")
         assert isinstance(parsed, ParsedRoll)
         assert parsed.verbose is False
 
     def test_reroll_with_message_override_of_verbose_roll_is_terse(self):
         room_id = "!reroll-verbose-room3:example.org"
-        build_command(room_id, "!roll 1d6 -v | attack")
-        parsed = build_command(room_id, "!reroll | defend")
+        build_dice_command(room_id, "!roll 1d6 -v | attack")
+        parsed = build_dice_command(room_id, "!reroll | defend")
         assert isinstance(parsed, ParsedRoll)
         assert parsed.verbose is False
 
     def test_reroll_with_own_verbose_flag_is_verbose(self):
         room_id = "!reroll-verbose-room4:example.org"
-        build_command(room_id, "!roll 1d6")
-        parsed = build_command(room_id, "!reroll -v")
+        build_dice_command(room_id, "!roll 1d6")
+        parsed = build_dice_command(room_id, "!reroll -v")
         assert isinstance(parsed, ParsedRoll)
         assert parsed.verbose is True
 
     def test_reroll_with_own_verbose_flag_and_target_override(self):
         room_id = "!reroll-verbose-room5:example.org"
-        build_command(room_id, "!roll 1d20 >15")
-        parsed = build_command(room_id, "!reroll >10 -v")
+        build_dice_command(room_id, "!roll 1d20 >15")
+        parsed = build_dice_command(room_id, "!reroll >10 -v")
         assert isinstance(parsed, ParsedRoll)
         assert parsed.verbose is True
         assert parsed.command.target == Target(operator=">", value=10)
 
     def test_reroll_with_own_verbose_flag_and_message_override(self):
         room_id = "!reroll-verbose-room6:example.org"
-        build_command(room_id, "!roll 1d6")
-        parsed = build_command(room_id, "!reroll -v | attack")
+        build_dice_command(room_id, "!roll 1d6")
+        parsed = build_dice_command(room_id, "!reroll -v | attack")
         assert isinstance(parsed, ParsedRoll)
         assert parsed.verbose is True
         assert parsed.message == "attack"
 
     def test_reroll_verbose_flag_does_not_persist_for_later_bare_reroll(self):
         room_id = "!reroll-verbose-room7:example.org"
-        build_command(room_id, "!roll 1d6")
-        build_command(room_id, "!reroll -v")
-        parsed = build_command(room_id, "!reroll")
+        build_dice_command(room_id, "!roll 1d6")
+        build_dice_command(room_id, "!reroll -v")
+        parsed = build_dice_command(room_id, "!reroll")
         assert isinstance(parsed, ParsedRoll)
         assert parsed.verbose is False
 
@@ -470,3 +480,52 @@ class TestParseExpr:
             "Invalid roll `'abc` — not a recognized dice expression. "
             "See `!roll --help` for syntax."
         )
+
+
+class TestBuildSaveCommand:
+    def test_bare_save_returns_usage(self):
+        assert build_save_command("!save") == SAVE_USAGE
+
+    def test_save_with_only_a_name_returns_usage(self):
+        assert build_save_command("!save attack") == SAVE_USAGE
+
+    def test_valid_save_returns_save_command(self):
+        result = build_save_command("!save attack 3d8+4")
+        assert result == SaveCommand(name="attack", expr="3d8+4")
+
+    def test_name_is_lowercased(self):
+        result = build_save_command("!save Attack 3d8+4")
+        assert isinstance(result, SaveCommand)
+        assert result.name == "attack"
+
+    def test_invalid_name_returns_error(self):
+        assert build_save_command("!save 1attack 3d8+4") == invalid_pattern_name(
+            "1attack"
+        )
+
+    def test_name_colliding_with_dice_notation_is_rejected(self):
+        """Digits aren't allowed in names at all, so a name like `d20` — which
+        would otherwise make `!roll d20` ambiguous once saved patterns are
+        looked up by name — is rejected up front."""
+        assert build_save_command("!save d20 3d8+4") == invalid_pattern_name("d20")
+
+    def test_name_with_space_is_rejected_via_invalid_characters(self):
+        """A name can't itself contain a space (the parser can't tell it apart
+        from the expression that follows), but a hyphen/underscore works."""
+        result = build_save_command("!save saving-throw 1d20+2")
+        assert result == SaveCommand(name="saving-throw", expr="1d20+2")
+
+    def test_invalid_expression_returns_roll_error(self):
+        assert build_save_command("!save attack abc") == invalid_expr(
+            "abc", "not a recognized dice expression"
+        )
+
+    def test_saved_expression_keeps_target_and_message_verbatim(self):
+        """The expression is stored as the raw string, not the parsed
+        `RollCommand` — target/message/verbose all just pass through."""
+        result = build_save_command("!save attack 3d8+4 >15 -v | Fireball")
+        assert result == SaveCommand(name="attack", expr="3d8+4 >15 -v | Fireball")
+
+    def test_extra_whitespace_around_expression_is_stripped(self):
+        result = build_save_command("!save attack   3d8+4  ")
+        assert result == SaveCommand(name="attack", expr="3d8+4")

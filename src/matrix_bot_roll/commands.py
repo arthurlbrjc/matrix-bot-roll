@@ -7,10 +7,13 @@ from matrix_bot_roll.messages import (
     INVALID_ROLL,
     NO_PREVIOUS_ROLL,
     ROLL_HELP,
+    SAVE_USAGE,
     USAGE,
     invalid_expr,
+    invalid_pattern_name,
 )
 from matrix_bot_roll.models import AdvDis, DiceSpec, KeepMode, Target, TargetOperator
+from matrix_bot_roll.saved_patterns import is_valid_name
 
 # Matches things like: 1d20, 2d6+4, d8, 3d10-2, 2d20kh1, 4d6kl3, 2d20adv, 2d20dis
 DICE_WITH_TOTAL_MODIFIER_RE = re.compile(
@@ -56,7 +59,24 @@ class ParsedRoll:
     message: Optional[str]
 
 
-def build_command(room_id: str, body: str) -> Union[ParsedRoll, str]:
+@dataclass
+class SaveCommand:
+    """
+    A fully parsed and validated `!save <name> <expr>` request, ready for the
+    caller to persist.
+
+    `expr` is kept as the original raw string rather than a parsed
+    `RollCommand`, mirroring how `!reroll` remembers its stored expression
+    (see `_last_rolls`) — it's re-parsed fresh whenever the saved pattern is
+    rolled, so a pattern saved today automatically picks up any dice syntax
+    added later.
+    """
+
+    name: str
+    expr: str
+
+
+def build_dice_command(room_id: str, body: str) -> Union[ParsedRoll, str]:
     """
     Parse a full `!roll`/`!r`/`!reroll`/`!rr` message body.
 
@@ -125,6 +145,35 @@ def _build_reroll_command(room_id: str, arg: Optional[str]) -> Union[ParsedRoll,
     if isinstance(result, ParsedRoll):
         _last_rolls[room_id] = new_arg
     return result
+
+
+def build_save_command(body: str) -> Union[SaveCommand, str]:
+    """
+    Parse a full `!save <name> <expr...>` message body: validate the pattern
+    name, then validate `<expr...>` using the same syntax `!roll` accepts
+    (target/message/verbose flags included). The expression is kept as-is
+    (see `SaveCommand`) — only its validity is checked here, not its parsed
+    form.
+
+    Kept separate from `build_dice_command` — a save is a write with its own
+    reply shape, not another kind of roll — so callers that only handle
+    `!roll`/`!reroll` (i.e. everywhere until `!save` is wired up) are
+    unaffected by this command existing.
+    """
+    parts = body.split(maxsplit=2)
+    if len(parts) < 3:
+        return SAVE_USAGE
+
+    name = parts[1].lower()
+    if not is_valid_name(name):
+        return invalid_pattern_name(name)
+
+    expr = parts[2].strip()
+    result = _parse_command(expr)
+    if isinstance(result, str):
+        return result
+
+    return SaveCommand(name=name, expr=expr)
 
 
 def _apply_reroll_overrides(
