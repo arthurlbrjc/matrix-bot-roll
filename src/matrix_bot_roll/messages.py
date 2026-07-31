@@ -38,3 +38,9 @@ ROLL_HELP = "\n".join(
 NO_PREVIOUS_ROLL = "No previous roll in this room — use `!roll <expression>` first."
 
 INVALID_ROLL = "Invalid roll expression — see `!roll --help` for syntax."
+
+
+def invalid_expr(expr: str, detail: str) -> str:
+    """Build a per-expression invalid-roll error naming the offending token and why it failed."""
+    safe_expr = expr.replace("`", "'")  # backticks would break the Markdown code span
+    return f"Invalid roll `{safe_expr}` — {detail}. See `!roll --help` for syntax."

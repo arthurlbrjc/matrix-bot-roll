@@ -3,7 +3,13 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, Union, cast
 
 from matrix_bot_roll.constants import MAX_DICE_COUNT, MAX_DICE_SIDES
-from matrix_bot_roll.messages import INVALID_ROLL, NO_PREVIOUS_ROLL, ROLL_HELP, USAGE
+from matrix_bot_roll.messages import (
+    INVALID_ROLL,
+    NO_PREVIOUS_ROLL,
+    ROLL_HELP,
+    USAGE,
+    invalid_expr,
+)
 from matrix_bot_roll.models import AdvDis, DiceSpec, KeepMode, Target, TargetOperator
 
 # Matches things like: 1d20, 2d6+4, d8, 3d10-2, 2d20kh1, 4d6kl3, 2d20adv, 2d20dis
@@ -201,8 +207,8 @@ def _parse_command(arg: str) -> Union[ParsedRoll, str]:
     specs = []
     for expr in exprs:
         spec = _parse_expr(expr)
-        if spec is None:
-            return INVALID_ROLL
+        if isinstance(spec, str):
+            return spec
         specs.append((expr, spec))
 
     command = RollCommand(specs=specs, target=target)
@@ -218,24 +224,28 @@ def _parse_target(token: str) -> Optional[Target]:
     return Target(operator=cast(TargetOperator, operator), value=int(value_str))
 
 
-def _parse_expr(expr: str) -> Optional[DiceSpec]:
-    """Parse and validate a dice expression like '2d6+4' or '2d20kh1' into a `DiceSpec`."""
+def _parse_expr(expr: str) -> Union[DiceSpec, str]:
+    """Parse and validate a dice expression like '2d6+4' or '2d20kh1' into a `DiceSpec`, or an error string naming what's wrong."""
     expr = expr.strip()
 
     die_modifier_match = DICE_WITH_DIE_MODIFIER_RE.match(expr)
     if die_modifier_match:
-        return _build_die_modifier_spec(die_modifier_match)
+        result: Union[DiceSpec, str] = _build_die_modifier_spec(die_modifier_match)
+    else:
+        total_modifier_match = DICE_WITH_TOTAL_MODIFIER_RE.match(expr)
+        if total_modifier_match:
+            result = _build_total_modifier_spec(total_modifier_match)
+        else:
+            return invalid_expr(expr, "not a recognized dice expression")
 
-    total_modifier_match = DICE_WITH_TOTAL_MODIFIER_RE.match(expr)
-    if total_modifier_match:
-        return _build_total_modifier_spec(total_modifier_match)
-
-    return None
+    if isinstance(result, str):
+        return invalid_expr(expr, result)
+    return result
 
 
 def _build_total_modifier_spec(
     total_modifier_match: "re.Match[str]",
-) -> Optional[DiceSpec]:
+) -> Union[DiceSpec, str]:
     """Build the `DiceSpec` for the plain syntax (e.g. '2d6+4'), where `modifier` applies once to the summed total."""
     count_str, sides_str, keep_str, modifier_str = total_modifier_match.groups()
     count = int(count_str) if count_str else 1
@@ -243,8 +253,8 @@ def _build_total_modifier_spec(
     modifier = int(modifier_str.replace(" ", "")) if modifier_str else 0
 
     resolved = _validate(count, sides, keep_str)
-    if resolved is None:
-        return None
+    if isinstance(resolved, str):
+        return resolved
     keep_mode, keep_n, adv_dis, count = resolved
 
     return DiceSpec(
@@ -260,7 +270,7 @@ def _build_total_modifier_spec(
 
 def _build_die_modifier_spec(
     die_modifier_match: "re.Match[str]",
-) -> Optional[DiceSpec]:
+) -> Union[DiceSpec, str]:
     """
     Build the `DiceSpec` for the per-die-modifier syntax (e.g. '4(d10+2)'), where `modifier`
     applies to each die individually, then optionally keep/advantage-selects among the
@@ -272,8 +282,8 @@ def _build_die_modifier_spec(
     modifier = int(modifier_str.replace(" ", ""))
 
     resolved = _validate(count, sides, keep_str)
-    if resolved is None:
-        return None
+    if isinstance(resolved, str):
+        return resolved
     keep_mode, keep_n, adv_dis, count = resolved
 
     return DiceSpec(
@@ -289,30 +299,37 @@ def _build_die_modifier_spec(
 
 def _validate(
     count: int, sides: int, keep_str: Optional[str]
-) -> Optional[Tuple[Optional[KeepMode], Optional[int], Optional[AdvDis], int]]:
-    """Combine `_in_bounds` and `_resolve_keep` into a single validate-or-None step."""
-    if not _in_bounds(count, sides):
-        return None
+) -> Union[Tuple[Optional[KeepMode], Optional[int], Optional[AdvDis], int], str]:
+    """Combine `_in_bounds` and `_resolve_keep`, short-circuiting on the first error string."""
+    bounds_error = _in_bounds(count, sides)
+    if bounds_error is not None:
+        return bounds_error
     return _resolve_keep(keep_str, count)
 
 
-def _in_bounds(count: int, sides: int) -> bool:
+def _in_bounds(count: int, sides: int) -> Optional[str]:
     """
     Sanity limits so nobody rolls 999999d999999 and hangs the bot.
 
     Checked against the requested count only — adv/dis are allowed to add one
-    extra die on top of MAX_DICE_COUNT (see `_resolve_keep`) by design.
+    extra die on top of MAX_DICE_COUNT (see `_resolve_keep`) by design. Returns
+    an error string describing the first bound violated, or None if in bounds.
     """
-    return 1 <= count <= MAX_DICE_COUNT and 2 <= sides <= MAX_DICE_SIDES
+    if not 1 <= count <= MAX_DICE_COUNT:
+        return f"dice count must be between 1 and {MAX_DICE_COUNT}"
+    if not 2 <= sides <= MAX_DICE_SIDES:
+        return f"sides must be between 2 and {MAX_DICE_SIDES}"
+    return None
 
 
 def _resolve_keep(
     keep_str: Optional[str], count: int
-) -> Optional[Tuple[Optional[KeepMode], Optional[int], Optional[AdvDis], int]]:
+) -> Union[Tuple[Optional[KeepMode], Optional[int], Optional[AdvDis], int], str]:
     """
     Parse a keep/advantage/disadvantage suffix (kh#, kl#, adv, dis) against `count`
     dice. Returns (keep_mode, keep_n, adv_dis, count) — with `count` bumped by one
-    for adv/dis — or None if there is no suffix or it resolves to an invalid keep_n.
+    for adv/dis — or an error string if there is a suffix and it resolves to an
+    invalid keep_n.
     """
     if not keep_str:
         return None, None, None, count
@@ -333,7 +350,9 @@ def _resolve_keep(
         keep_n = int(keep_str[2:])
         adv_dis = None
 
-    if keep_n < 1 or keep_n > count:
-        return None
+    if keep_n < 1:
+        return f"`{keep_str}` needs a keep count of at least 1"
+    if keep_n > count:
+        return f"`{keep_str}` keeps more dice than were rolled ({count})"
 
     return keep_mode, keep_n, adv_dis, count

@@ -13,10 +13,10 @@ os.environ.setdefault("MATRIX_STORE_PATH", "/tmp/matrix-bot-roll-test-store")
 
 from matrix_bot_roll.main import message_callback  # noqa: E402
 from matrix_bot_roll.messages import (  # noqa: E402
-    INVALID_ROLL,
     NO_PREVIOUS_ROLL,
     ROLL_HELP,
     USAGE,
+    invalid_expr,
 )
 
 
@@ -44,7 +44,9 @@ class TestRoll:
         assert "**" in output
 
     def test_invalid_expression_returns_invalid_roll(self):
-        assert _send_body("!room:example.org", "!roll bogus") == INVALID_ROLL
+        assert _send_body("!room:example.org", "!roll bogus") == invalid_expr(
+            "bogus", "not a recognized dice expression"
+        )
 
     def test_multiple_expressions_include_grand_total(self):
         output = _send_body("!room:example.org", "!roll 1d6 1d4")
@@ -113,7 +115,9 @@ class TestRoll:
         assert "❌" not in output
 
     def test_malformed_target_returns_invalid_roll(self):
-        assert _send_body("!room:example.org", "!roll 1d6 >") == INVALID_ROLL
+        assert _send_body("!room:example.org", "!roll 1d6 >") == invalid_expr(
+            ">", "not a recognized dice expression"
+        )
 
     def test_default_output_is_terse(self):
         output = _send_body("!room:example.org", "!roll 4d6kh3")

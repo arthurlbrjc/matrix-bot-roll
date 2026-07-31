@@ -4,7 +4,13 @@ import pytest
 
 from matrix_bot_roll import commands
 from matrix_bot_roll.commands import ParsedRoll, RollCommand, build_command
-from matrix_bot_roll.messages import INVALID_ROLL, NO_PREVIOUS_ROLL, ROLL_HELP, USAGE
+from matrix_bot_roll.messages import (
+    INVALID_ROLL,
+    NO_PREVIOUS_ROLL,
+    ROLL_HELP,
+    USAGE,
+    invalid_expr,
+)
 from matrix_bot_roll.models import Target
 
 
@@ -47,12 +53,13 @@ class TestBuildCommandRoll:
         assert result.target is None
 
     def test_invalid_expression_returns_invalid_roll(self):
-        assert build_command("!room:example.org", "!roll bogus") == INVALID_ROLL
+        result = build_command("!room:example.org", "!roll bogus")
+        assert result == invalid_expr("bogus", "not a recognized dice expression")
 
     def test_mix_of_valid_and_invalid_rejects_whole_command(self):
         """One deliberate behavior change: any invalid expr rejects the whole line."""
         result = build_command("!room:example.org", "!roll 4d20 bogus 1d6")
-        assert result == INVALID_ROLL
+        assert result == invalid_expr("bogus", "not a recognized dice expression")
 
     def test_message_only_with_no_dice_expression_is_invalid(self):
         """A `| message` suffix with no dice expression at all is not a valid roll."""
@@ -61,24 +68,34 @@ class TestBuildCommandRoll:
         )
 
     @pytest.mark.parametrize(
-        "expr",
+        "expr, detail",
         [
-            "abc",
-            "0d6",  # count < 1
-            "1d1",  # sides < 2
-            "101d6",  # count > 100
-            "1d101",  # sides > 100
-            "2d20kh5",  # keep_n > count
-            "2d20kh0",  # keep_n < 1
-            "3(d6)",  # missing mandatory modifier
-            "0(d6+1)",  # count < 1
-            "101(d6+1)",  # count > 100
-            "2(d1+1)",  # sides < 2
-            "2(d101+1)",  # sides > 100
+            ("abc", "not a recognized dice expression"),
+            ("0d6", "dice count must be between 1 and 100"),  # count < 1
+            ("1d1", "sides must be between 2 and 100"),  # sides < 2
+            ("101d6", "dice count must be between 1 and 100"),  # count > 100
+            ("1d101", "sides must be between 2 and 100"),  # sides > 100
+            (
+                "2d20kh5",
+                "`kh5` keeps more dice than were rolled (2)",
+            ),  # keep_n > count
+            (
+                "2d20kh0",
+                "`kh0` needs a keep count of at least 1",
+            ),  # keep_n < 1
+            (
+                "3(d6)",
+                "not a recognized dice expression",
+            ),  # missing mandatory modifier
+            ("0(d6+1)", "dice count must be between 1 and 100"),  # count < 1
+            ("101(d6+1)", "dice count must be between 1 and 100"),  # count > 100
+            ("2(d1+1)", "sides must be between 2 and 100"),  # sides < 2
+            ("2(d101+1)", "sides must be between 2 and 100"),  # sides > 100
         ],
     )
-    def test_invalid_expressions_are_rejected(self, expr):
-        assert build_command("!room:example.org", f"!roll {expr}") == INVALID_ROLL
+    def test_invalid_expressions_are_rejected(self, expr, detail):
+        result = build_command("!room:example.org", f"!roll {expr}")
+        assert result == invalid_expr(expr, detail)
 
     def test_expression_is_remembered_for_reroll(self):
         room_id = "!room:example.org"
@@ -199,8 +216,9 @@ class TestBuildCommandTarget:
         ],
     )
     def test_malformed_target_rejects_whole_command(self, bad_target):
+        """Tokens that don't parse as a target fall through to expr parsing and get named there."""
         result = build_command("!room:example.org", f"!roll 1d6 {bad_target}")
-        assert result == INVALID_ROLL
+        assert result == invalid_expr(bad_target, "not a recognized dice expression")
 
     def test_target_with_no_dice_expression_rejects_whole_command(self):
         result = build_command("!room:example.org", "!roll >15")
@@ -440,5 +458,15 @@ class TestParseExpr:
         assert spec.modifier == 2
         assert spec.modifier_mode == "per_die"
 
-    def test_invalid_expression_returns_none(self):
-        assert commands._parse_expr("abc") is None
+    def test_invalid_expression_returns_error_string(self):
+        result = commands._parse_expr("abc")
+        assert result == invalid_expr("abc", "not a recognized dice expression")
+
+    def test_invalid_expression_with_backtick_is_sanitized(self):
+        """A backtick in the offending token would otherwise break the reply's Markdown code span."""
+        result = commands._parse_expr("`abc")
+        assert result == invalid_expr("`abc", "not a recognized dice expression")
+        assert result == (
+            "Invalid roll `'abc` — not a recognized dice expression. "
+            "See `!roll --help` for syntax."
+        )
