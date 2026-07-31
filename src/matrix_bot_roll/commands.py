@@ -87,20 +87,34 @@ def _build_reroll_command(room_id: str, arg: Optional[str]) -> Union[ParsedRoll,
     this room. An optional leading target (e.g. '>15') replaces the target the
     original roll had; an optional `| message` suffix replaces its message. Both
     are remembered for subsequent bare `!reroll`s in this room; whichever isn't
-    given is replayed unchanged from the original roll.
+    given is replayed unchanged from the original roll. The original roll's
+    `-v`/`--verbose` flag is never inherited: a reroll is terse unless it carries
+    its own verbose flag.
     """
     stored = _last_rolls.get(room_id)
     if stored is None:
         return NO_PREVIOUS_ROLL
     if not arg:
-        return _parse_command(stored)
+        return _parse_command(_strip_verbose_flags(stored))
 
     prefix, separator, message = arg.partition("|")
-    prefix = prefix.strip()
-    if prefix and _parse_target(prefix) is None:
+    prefix_tokens = prefix.split()
+    verbose = any(token.lower() in VERBOSE_FLAGS for token in prefix_tokens)
+    target_tokens = [
+        token for token in prefix_tokens if token.lower() not in VERBOSE_FLAGS
+    ]
+    if len(target_tokens) > 1 or (
+        target_tokens and _parse_target(target_tokens[0]) is None
+    ):
         return INVALID_ROLL
 
-    new_arg = _apply_reroll_overrides(stored, prefix or None, bool(separator), message)
+    new_arg = _apply_reroll_overrides(
+        stored,
+        target_tokens[0] if target_tokens else None,
+        verbose,
+        bool(separator),
+        message,
+    )
     result = _parse_command(new_arg)
     if isinstance(result, ParsedRoll):
         _last_rolls[room_id] = new_arg
@@ -108,24 +122,50 @@ def _build_reroll_command(room_id: str, arg: Optional[str]) -> Union[ParsedRoll,
 
 
 def _apply_reroll_overrides(
-    stored: str, new_target_token: Optional[str], has_pipe: bool, message: str
+    stored: str,
+    new_target_token: Optional[str],
+    verbose: bool,
+    has_pipe: bool,
+    message: str,
 ) -> str:
-    """Rebuild the stored roll string with an optional target override and/or message override applied."""
+    """
+    Rebuild the stored roll string with an optional target override and/or message
+    override applied. The original roll's verbose flag is dropped; `verbose` (from
+    this reroll's own arg) decides whether the rebuilt string carries one.
+    """
     stored_dice_part, stored_separator, stored_message = stored.partition("|")
     stored_tokens = stored_dice_part.split()
-    kept_tokens = [token for token in stored_tokens if _parse_target(token) is None]
+    kept_tokens = [
+        token
+        for token in stored_tokens
+        if _parse_target(token) is None and token.lower() not in VERBOSE_FLAGS
+    ]
 
     target_token = new_target_token or next(
         (token for token in stored_tokens if _parse_target(token) is not None), None
     )
     if target_token:
         kept_tokens.append(target_token)
+    if verbose:
+        kept_tokens.append("-v")
     dice_part = " ".join(kept_tokens)
 
     if has_pipe:
         return f"{dice_part} | {message}"
     if stored_separator:
         return f"{dice_part} | {stored_message}"
+    return dice_part
+
+
+def _strip_verbose_flags(text: str) -> str:
+    """Drop any `-v`/`--verbose` tokens from the dice part of `text`, leaving the message part untouched."""
+    dice_part, separator, message = text.partition("|")
+    kept_tokens = [
+        token for token in dice_part.split() if token.lower() not in VERBOSE_FLAGS
+    ]
+    dice_part = " ".join(kept_tokens)
+    if separator:
+        return f"{dice_part} | {message}"
     return dice_part
 
 

@@ -349,6 +349,60 @@ class TestBuildCommandReroll:
         assert parsed.command.target == Target(operator=">", value=15)
 
 
+class TestBuildCommandRerollVerbose:
+    def test_bare_reroll_of_verbose_roll_is_terse(self):
+        room_id = "!reroll-verbose-room:example.org"
+        build_command(room_id, "!roll 1d6 -v")
+        parsed = build_command(room_id, "!reroll")
+        assert isinstance(parsed, ParsedRoll)
+        assert parsed.verbose is False
+
+    def test_reroll_with_target_override_of_verbose_roll_is_terse(self):
+        room_id = "!reroll-verbose-room2:example.org"
+        build_command(room_id, "!roll 1d20 >15 -v")
+        parsed = build_command(room_id, "!reroll >10")
+        assert isinstance(parsed, ParsedRoll)
+        assert parsed.verbose is False
+
+    def test_reroll_with_message_override_of_verbose_roll_is_terse(self):
+        room_id = "!reroll-verbose-room3:example.org"
+        build_command(room_id, "!roll 1d6 -v | attack")
+        parsed = build_command(room_id, "!reroll | defend")
+        assert isinstance(parsed, ParsedRoll)
+        assert parsed.verbose is False
+
+    def test_reroll_with_own_verbose_flag_is_verbose(self):
+        room_id = "!reroll-verbose-room4:example.org"
+        build_command(room_id, "!roll 1d6")
+        parsed = build_command(room_id, "!reroll -v")
+        assert isinstance(parsed, ParsedRoll)
+        assert parsed.verbose is True
+
+    def test_reroll_with_own_verbose_flag_and_target_override(self):
+        room_id = "!reroll-verbose-room5:example.org"
+        build_command(room_id, "!roll 1d20 >15")
+        parsed = build_command(room_id, "!reroll >10 -v")
+        assert isinstance(parsed, ParsedRoll)
+        assert parsed.verbose is True
+        assert parsed.command.target == Target(operator=">", value=10)
+
+    def test_reroll_with_own_verbose_flag_and_message_override(self):
+        room_id = "!reroll-verbose-room6:example.org"
+        build_command(room_id, "!roll 1d6")
+        parsed = build_command(room_id, "!reroll -v | attack")
+        assert isinstance(parsed, ParsedRoll)
+        assert parsed.verbose is True
+        assert parsed.message == "attack"
+
+    def test_reroll_verbose_flag_does_not_persist_for_later_bare_reroll(self):
+        room_id = "!reroll-verbose-room7:example.org"
+        build_command(room_id, "!roll 1d6")
+        build_command(room_id, "!reroll -v")
+        parsed = build_command(room_id, "!reroll")
+        assert isinstance(parsed, ParsedRoll)
+        assert parsed.verbose is False
+
+
 class TestParseExpr:
     def test_default_count_is_one(self):
         spec = commands._parse_expr("d8")

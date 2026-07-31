@@ -5,7 +5,8 @@ USAGE = "\n".join(
         "• `!roll <expression> [expression ...] [target] [-v] [| message]` "
         "(or `!r`) — roll dice",
         "• `!roll --help` — detailed roll syntax and examples",
-        "• `!reroll [target] [| message]` (or `!rr`) — repeat the last roll",
+        "• `!reroll [target] [-v] [| message]` (or `!rr`) — repeat the last roll "
+        "(always terse unless `-v` is given here)",
         "• `!detail` (or `!d`) — show the full breakdown of the last roll in this room",
     ]
 )
@@ -29,6 +30,8 @@ ROLL_HELP = "\n".join(
         "• `!roll 3d8+4 | attack` — attach a message to the roll",
         "• `!roll 4d6kh3 -v` (or `--verbose`) — show the full per-die breakdown "
         "(terse by default); the flag can go anywhere in the command",
+        "• `!reroll -v` — repeat the last roll verbosely; a reroll never inherits "
+        "the original roll's own `-v`, so add it again if you want it",
     ]
 )
 
