@@ -58,6 +58,13 @@ NO_SAVED_PATTERNS = (
 FORGET_USAGE = "Usage: `!forget <name>` (or `!f`) — e.g. `!forget attack`."
 
 
+def too_many_expressions(max_expressions: int) -> str:
+    """Build an error for a roll with more dice expressions than `max_expressions` allows."""
+    return (
+        f"Too many dice expressions — at most {max_expressions} are allowed per roll."
+    )
+
+
 def invalid_expr(expr: str, detail: str) -> str:
     """Build a per-expression invalid-roll error naming the offending token and why it failed."""
     safe_expr = expr.replace("`", "'")  # backticks would break the Markdown code span

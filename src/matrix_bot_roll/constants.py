@@ -1,9 +1,10 @@
 import os
 
-# Sanity limits on dice count/sides to prevent abuse; overridable via env for
-# deployments that want stricter or looser bounds.
+# Sanity limits on dice count/sides/expressions-per-command to prevent abuse;
+# overridable via env for deployments that want stricter or looser bounds.
 MAX_DICE_COUNT = int(os.environ.get("MAX_DICE_COUNT", 100))
 MAX_DICE_SIDES = int(os.environ.get("MAX_DICE_SIDES", 100))
+MAX_DICE_EXPRESSIONS = int(os.environ.get("MAX_DICE_EXPRESSIONS", 3))
 
 # Every saved pattern for every user lives in one shared account-data blob
 # (see saved_patterns.py), which Synapse caps at ~65KB — this bounds how much

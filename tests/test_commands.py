@@ -14,6 +14,7 @@ from matrix_bot_roll.commands import (
     build_save_command,
     build_saved_pattern_command,
 )
+from matrix_bot_roll.constants import MAX_DICE_EXPRESSIONS
 from matrix_bot_roll.messages import (
     FORGET_USAGE,
     INVALID_ROLL,
@@ -23,6 +24,7 @@ from matrix_bot_roll.messages import (
     USAGE,
     invalid_expr,
     invalid_pattern_name,
+    too_many_expressions,
 )
 from matrix_bot_roll.models import Target
 
@@ -73,6 +75,17 @@ class TestBuildCommandRoll:
         """One deliberate behavior change: any invalid expr rejects the whole line."""
         result = build_dice_command("!room:example.org", "!roll 4d20 bogus 1d6")
         assert result == invalid_expr("bogus", "not a recognized dice expression")
+
+    def test_expression_count_at_limit_is_parsed(self):
+        expr = " ".join(["1d6"] * MAX_DICE_EXPRESSIONS)
+        result = _roll("!room:example.org", f"!roll {expr}")
+        assert isinstance(result, RollCommand)
+        assert len(result.specs) == MAX_DICE_EXPRESSIONS
+
+    def test_expression_count_over_limit_is_rejected(self):
+        expr = " ".join(["1d6"] * (MAX_DICE_EXPRESSIONS + 1))
+        result = build_dice_command("!room:example.org", f"!roll {expr}")
+        assert result == too_many_expressions(MAX_DICE_EXPRESSIONS)
 
     def test_message_only_with_no_dice_expression_is_invalid(self):
         """A `| message` suffix with no dice expression at all is not a valid roll."""

@@ -2,7 +2,12 @@ import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, Union, cast
 
-from matrix_bot_roll.constants import MAX_DICE_COUNT, MAX_DICE_SIDES, VERBOSE_FLAGS
+from matrix_bot_roll.constants import (
+    MAX_DICE_COUNT,
+    MAX_DICE_EXPRESSIONS,
+    MAX_DICE_SIDES,
+    VERBOSE_FLAGS,
+)
 from matrix_bot_roll.messages import (
     FORGET_USAGE,
     INVALID_ROLL,
@@ -12,6 +17,7 @@ from matrix_bot_roll.messages import (
     USAGE,
     invalid_expr,
     invalid_pattern_name,
+    too_many_expressions,
 )
 from matrix_bot_roll.models import AdvDis, DiceSpec, KeepMode, Target, TargetOperator
 from matrix_bot_roll.saved_patterns import is_valid_name
@@ -296,7 +302,7 @@ def _parse_command(arg: str) -> Union[ParsedRoll, str]:
     `| message` suffix, then validate all expressions. The target and verbose flag
     may appear anywhere among the space-separated tokens, in any order; a repeated
     verbose flag is harmless, but a second target token is rejected as ambiguous.
-    At least one dice expression is required.
+    At least one dice expression is required, and at most MAX_DICE_EXPRESSIONS.
     """
     dice_part, _, message = arg.partition("|")
 
@@ -317,6 +323,8 @@ def _parse_command(arg: str) -> Union[ParsedRoll, str]:
 
     if not exprs:
         return INVALID_ROLL
+    if len(exprs) > MAX_DICE_EXPRESSIONS:
+        return too_many_expressions(MAX_DICE_EXPRESSIONS)
 
     specs = []
     for expr in exprs:
