@@ -74,12 +74,12 @@ def pattern_saved(name: str, expr: str) -> str:
     dice_tokens = [
         token for token in dice_part.split() if token.lower() not in VERBOSE_FLAGS
     ]
-    safe_dice = " ".join(dice_tokens).replace("`", "'")
-    lines = [f"✅ Saved `{name}`:", f"`{safe_dice}`"]
+    dice = " ".join(dice_tokens)
+    lines = [f"✅ Saved `{name}`:", f"🎲 {dice}"]
     message = message.strip()
     if message:
         safe_message = message.replace("`", "'")
-        lines.append(f"`{safe_message}`")
+        lines.append(f"💬 {safe_message}")
     return "\n".join(lines)
 
 
