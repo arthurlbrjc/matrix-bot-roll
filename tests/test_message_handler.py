@@ -12,10 +12,13 @@ os.environ.setdefault("MATRIX_PASSWORD", "unused-test-password")
 os.environ.setdefault("MATRIX_DEVICE_NAME", "matrix-bot-roll-test")
 os.environ.setdefault("MATRIX_STORE_PATH", "/tmp/matrix-bot-roll-test-store")
 
+from matrix_bot_roll import message_handler  # noqa: E402
+from matrix_bot_roll.changelog import Release  # noqa: E402
 from matrix_bot_roll.constants import MAX_SAVED_PATTERNS_PER_USER  # noqa: E402
 from matrix_bot_roll.message_handler import handle_room_message  # noqa: E402
 from matrix_bot_roll.messages import (  # noqa: E402
     FORGET_USAGE,
+    INVALID_GRANULARITY,
     NO_PREVIOUS_ROLL,
     ROLL_HELP,
     SAVE_USAGE,
@@ -394,6 +397,51 @@ class TestForget:
         assert output == pattern_forgotten("attack")
         assert store["data"]["users"]["@alice:example.invalid"] == {"attack": "3d8+4"}
         assert store["data"]["users"]["@bob:example.invalid"] == {}
+
+
+class TestChanges:
+    _RELEASES = [
+        Release(
+            version=(1, 4, 1), date="2026-07-31", body="### Fixed\n- clarify error"
+        ),
+        Release(
+            version=(1, 4, 0), date="2026-07-31", body="### Added\n- reroll overrides"
+        ),
+        Release(
+            version=(1, 3, 0), date="2026-07-30", body="### Changed\n- terse by default"
+        ),
+    ]
+
+    def _with_fake_changelog(self, monkeypatch):
+        monkeypatch.setattr(
+            message_handler, "parse_changelog", lambda: list(self._RELEASES)
+        )
+
+    def test_bare_changes_defaults_to_minor(self, monkeypatch):
+        self._with_fake_changelog(monkeypatch)
+        output = _send_body("!room:example.org", "!changes")
+        assert "1.4.1" in output
+        assert "1.4.0" in output
+        assert "1.3.0" not in output
+
+    def test_explicit_granularity(self, monkeypatch):
+        self._with_fake_changelog(monkeypatch)
+        output = _send_body("!room:example.org", "!changes major")
+        assert "1.4.1" in output
+        assert "1.4.0" in output
+        assert "1.3.0" in output
+
+    def test_c_alias_defaults_to_minor(self, monkeypatch):
+        self._with_fake_changelog(monkeypatch)
+        output = _send_body("!room:example.org", "!c")
+        assert "1.4.1" in output
+        assert "1.4.0" in output
+        assert "1.3.0" not in output
+
+    def test_invalid_granularity_returns_error(self, monkeypatch):
+        self._with_fake_changelog(monkeypatch)
+        output = _send_body("!room:example.org", "!changes bogus")
+        assert output == INVALID_GRANULARITY
 
 
 class TestRollSavedPattern:

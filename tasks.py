@@ -150,6 +150,13 @@ def version(ctx, release="patch"):
     """
     bumpversion(ctx, release)
     new_version = ctx.run("poetry version -s", hide="out").stdout.strip()
+    with open("CHANGELOG.md") as changelog:
+        changelog_has_entry = f"[{new_version}]" in changelog.read()
+    if not changelog_has_entry:
+        print(
+            f"Warning: CHANGELOG.md has no entry for {new_version} — "
+            f"`!changes` will be stale until one is added."
+        )
     ctx.run("git add --all")
     ctx.run(f"git commit --message='v{new_version}'")
     ctx.run(f"git tag --annotate 'v{new_version}' --message='v{new_version}'")

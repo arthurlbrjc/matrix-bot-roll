@@ -3,6 +3,12 @@ from typing import Optional, Tuple, Union
 from nio import AsyncClient, MatrixRoom, RoomMessageText
 
 from matrix_bot_roll import saved_patterns
+from matrix_bot_roll.changelog import (
+    build_changes_command,
+    format_changes,
+    parse_changelog,
+    select_releases,
+)
 from matrix_bot_roll.command_handler import handle
 from matrix_bot_roll.commands import (
     ListSavedCommand,
@@ -39,12 +45,13 @@ _ROLL_ALIASES = ("!roll", "!r", "!reroll", "!rr")
 _DETAIL_ALIASES = ("!detail", "!d")
 _SAVE_ALIASES = ("!save", "!s")
 _FORGET_ALIASES = ("!forget", "!f")
+_CHANGES_ALIASES = ("!changes", "!c")
 
 
 async def handle_room_message(
     client: AsyncClient, room: MatrixRoom, event: RoomMessageText
 ) -> None:
-    """Route an incoming Matrix message to the matching command family (roll/detail/save/forget), then send its reply back to the room."""
+    """Route an incoming Matrix message to the matching command family (roll/detail/save/forget/changes), then send its reply back to the room."""
     body = event.body.strip()
     command_name = body.split(maxsplit=1)[0] if body else ""
     if command_name not in (
@@ -52,6 +59,7 @@ async def handle_room_message(
         *_DETAIL_ALIASES,
         *_SAVE_ALIASES,
         *_FORGET_ALIASES,
+        *_CHANGES_ALIASES,
     ):
         return
 
@@ -61,6 +69,8 @@ async def handle_room_message(
         reply = await _handle_save(client, event.sender, body)
     elif command_name in _FORGET_ALIASES:
         reply = await _handle_forget(client, event.sender, body)
+    elif command_name in _CHANGES_ALIASES:
+        reply = _handle_changes(body)
     else:
         reply = await _handle_roll(client, room.room_id, event.sender, body)
 
@@ -161,6 +171,17 @@ async def _handle_forget(client: AsyncClient, user_id: str, body: str) -> str:
     if not forgotten:
         return pattern_not_found(parsed.name)
     return pattern_forgotten(parsed.name)
+
+
+def _handle_changes(body: str) -> str:
+    """Parse and answer a `!changes` command: recent changelog entries since the last release of the requested granularity (`minor` by default)."""
+    parsed = build_changes_command(body)
+    if isinstance(parsed, str):
+        return parsed
+
+    releases = parse_changelog()
+    selected = select_releases(releases, parsed.granularity)
+    return format_changes(selected)
 
 
 def _format_result(result: RollResult, verbose: bool, message: Optional[str]) -> str:

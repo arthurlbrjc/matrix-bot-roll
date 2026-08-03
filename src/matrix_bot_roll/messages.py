@@ -18,6 +18,8 @@ USAGE = "\n".join(
         "— save a roll pattern to reuse with `!roll <name>`",
         "• `!forget <name>` (or `!f`) — remove a saved pattern",
         "• `!detail` (or `!d`) — show the full breakdown of the last roll in this room",
+        "• `!changes [major|minor|patch]` (or `!c`) — show changelog entries "
+        "since the last release of that granularity (`minor` by default)",
     ]
 )
 
@@ -56,6 +58,10 @@ NO_SAVED_PATTERNS = (
 )
 
 FORGET_USAGE = "Usage: `!forget <name>` (or `!f`) — e.g. `!forget attack`."
+
+INVALID_GRANULARITY = "Invalid granularity — expected `major`, `minor`, or `patch`."
+
+NO_RELEASES = "No changelog entries found."
 
 
 def too_many_expressions(max_expressions: int) -> str:
