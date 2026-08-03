@@ -1,13 +1,15 @@
 import re
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple, Union, cast
+from typing import List, Optional, Tuple, Union, cast
 
 from matrix_bot_roll.constants import (
     MAX_DICE_COUNT,
     MAX_DICE_EXPRESSIONS,
     MAX_DICE_SIDES,
+    MAX_TRACKED_ROOMS,
     VERBOSE_FLAGS,
 )
+from matrix_bot_roll.lru_dict import LRUDict
 from matrix_bot_roll.messages import (
     FORGET_USAGE,
     INVALID_ROLL,
@@ -42,7 +44,7 @@ DICE_WITH_DIE_MODIFIER_RE = re.compile(
 # space-separated tokens, like the verbose flag.
 TARGET_RE = re.compile(r"^(>=|<=|!=|>|<|=)(-?\d+)$")
 
-_last_rolls: Dict[str, str] = {}
+_last_rolls: LRUDict[str] = LRUDict(max_size=MAX_TRACKED_ROOMS)
 
 
 @dataclass

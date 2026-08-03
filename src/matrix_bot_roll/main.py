@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import os
-from typing import Dict, Optional, Tuple, Union
+from typing import Optional, Tuple, Union
 
 from nio import AsyncClient, MatrixRoom, RoomMessageText
 
@@ -15,9 +15,11 @@ from matrix_bot_roll.commands import (
     build_save_command,
     build_saved_pattern_command,
 )
+from matrix_bot_roll.constants import MAX_TRACKED_ROOMS
 from matrix_bot_roll.formatting import format_detail, markdown_to_html
 from matrix_bot_roll.health_check import serve_health_check
 from matrix_bot_roll.logging_setup import configure_logging
+from matrix_bot_roll.lru_dict import LRUDict
 from matrix_bot_roll.matrix_client import run_client
 from matrix_bot_roll.messages import (
     NO_PREVIOUS_ROLL,
@@ -36,7 +38,9 @@ logger.info("Starting bot", extra={"pid": os.getpid()})
 # The last `!roll`/`!reroll` result shown per room, for `!detail` to redisplay
 # without rolling again — display-only memory, kept out of the rolling domain
 # (`RollCommand`/`RollResult`/`command_handler`).
-_last_details: Dict[str, Tuple[RollResult, Optional[str]]] = {}
+_last_details: LRUDict[Tuple[RollResult, Optional[str]]] = LRUDict(
+    max_size=MAX_TRACKED_ROOMS
+)
 
 # Every command family's recognized aliases, so adding a new alias is a
 # one-line change here rather than touching both the guard clause below and

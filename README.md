@@ -11,7 +11,8 @@ A Matrix bot that listens for `!roll` commands and replies with dice roll result
 - `!roll --help` — detailed roll syntax and examples (modifiers, kh/kl, adv/dis, group modifiers)
 - `!reroll [target] [-v] [| message]` (or `!rr`) — repeat the last `!roll` expression sent in the room, optionally overriding its target and/or message, e.g. `!reroll >15`, `!reroll | defend`; always terse, even if the original roll used `-v` — add `-v` to the reroll itself to get a verbose reroll
 - Auto-joins any room it's invited to
-- Sanity limits on dice count (1–100), sides (2–100), and expressions per roll (up to 3) to prevent abuse, overridable via `MAX_DICE_COUNT`/`MAX_DICE_SIDES`/`MAX_DICE_EXPRESSIONS`
+- Sanity limits on dice count (`MAX_DICE_COUNT`), sides (`MAX_DICE_SIDES`), and expressions per roll (`MAX_DICE_EXPRESSIONS`) to prevent abuse
+- Per-room "last roll"/"last detail" memory is capped at the `MAX_TRACKED_ROOMS` most recently active rooms (LRU-evicted)
 - Replies as both plain text and formatted HTML
 
 ## Requirements

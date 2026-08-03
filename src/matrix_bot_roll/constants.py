@@ -12,4 +12,8 @@ MAX_DICE_EXPRESSIONS = int(os.environ.get("MAX_DICE_EXPRESSIONS", 3))
 MAX_SAVED_PATTERNS_PER_USER = int(os.environ.get("MAX_SAVED_PATTERNS_PER_USER", 25))
 MAX_PATTERN_NAME_LENGTH = int(os.environ.get("MAX_PATTERN_NAME_LENGTH", 32))
 
+# Caps the per-room "last roll"/"last detail" memory (see lru_dict.py) so a bot
+# invited into unboundedly many rooms over a long uptime doesn't leak memory.
+MAX_TRACKED_ROOMS = int(os.environ.get("MAX_TRACKED_ROOMS", 1000))
+
 VERBOSE_FLAGS = {"-v", "--verbose"}
