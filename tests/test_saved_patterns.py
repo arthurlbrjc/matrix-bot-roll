@@ -70,6 +70,58 @@ def test_is_valid_name(name, expected):
     assert saved_patterns.is_valid_name(name) is expected
 
 
+def test_get_pattern_returns_none_when_nothing_saved():
+    client, _ = fake_client(initial_blob=None)
+
+    async def run():
+        return await saved_patterns.get_pattern(
+            client, "@alice:example.invalid", "attack"
+        )
+
+    assert asyncio.run(run()) is None
+
+
+def test_get_pattern_returns_none_for_unknown_name():
+    initial_blob = {"users": {"@alice:example.invalid": {"attack": "3d8+4"}}}
+    client, _ = fake_client(initial_blob=initial_blob)
+
+    async def run():
+        return await saved_patterns.get_pattern(
+            client, "@alice:example.invalid", "defend"
+        )
+
+    assert asyncio.run(run()) is None
+
+
+def test_get_pattern_returns_the_saved_expression():
+    initial_blob = {"users": {"@alice:example.invalid": {"attack": "3d8+4"}}}
+    client, _ = fake_client(initial_blob=initial_blob)
+
+    async def run():
+        return await saved_patterns.get_pattern(
+            client, "@alice:example.invalid", "attack"
+        )
+
+    assert asyncio.run(run()) == "3d8+4"
+
+
+def test_get_pattern_does_not_leak_across_users():
+    initial_blob = {
+        "users": {
+            "@alice:example.invalid": {"attack": "3d8+4"},
+            "@bob:example.invalid": {"attack": "1d20+7"},
+        }
+    }
+    client, _ = fake_client(initial_blob=initial_blob)
+
+    async def run():
+        return await saved_patterns.get_pattern(
+            client, "@bob:example.invalid", "attack"
+        )
+
+    assert asyncio.run(run()) == "1d20+7"
+
+
 def test_save_pattern_then_stores_it():
     client, store = fake_client(initial_blob=None)
 

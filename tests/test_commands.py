@@ -9,6 +9,7 @@ from matrix_bot_roll.commands import (
     SaveCommand,
     build_dice_command,
     build_save_command,
+    build_saved_pattern_command,
 )
 from matrix_bot_roll.messages import (
     INVALID_ROLL,
@@ -529,3 +530,57 @@ class TestBuildSaveCommand:
     def test_extra_whitespace_around_expression_is_stripped(self):
         result = build_save_command("!save attack   3d8+4  ")
         assert result == SaveCommand(name="attack", expr="3d8+4")
+
+
+class TestBuildSavedPatternCommand:
+    def test_bare_invocation_rolls_the_stored_expression(self):
+        result = build_saved_pattern_command("!room:example.org", "3d8+4", None)
+        assert isinstance(result, ParsedRoll)
+        assert [expr for expr, _ in result.command.specs] == ["3d8+4"]
+        assert result.command.target is None
+        assert result.verbose is False
+        assert result.message is None
+
+    def test_stored_target_and_message_are_replayed(self):
+        result = build_saved_pattern_command(
+            "!room:example.org", "3d8+4 >15 | Fireball", None
+        )
+        assert isinstance(result, ParsedRoll)
+        assert result.command.target == Target(operator=">", value=15)
+        assert result.message == "Fireball"
+
+    def test_stored_verbose_flag_is_not_replayed(self):
+        """Mirrors `!reroll`: a saved pattern's own `-v` isn't inherited on
+        bare invocation, only on an invocation that carries its own `-v`."""
+        result = build_saved_pattern_command("!room:example.org", "3d8+4 -v", None)
+        assert isinstance(result, ParsedRoll)
+        assert result.verbose is False
+
+    def test_override_arg_replaces_target(self):
+        result = build_saved_pattern_command("!room:example.org", "3d8+4 >15", ">10")
+        assert isinstance(result, ParsedRoll)
+        assert result.command.target == Target(operator=">", value=10)
+
+    def test_override_arg_replaces_message(self):
+        result = build_saved_pattern_command(
+            "!room:example.org", "3d8+4 | attack", "| defend"
+        )
+        assert isinstance(result, ParsedRoll)
+        assert result.message == "defend"
+
+    def test_override_arg_sets_verbose(self):
+        result = build_saved_pattern_command("!room:example.org", "3d8+4", "-v")
+        assert isinstance(result, ParsedRoll)
+        assert result.verbose is True
+
+    def test_invalid_override_arg_is_invalid(self):
+        result = build_saved_pattern_command("!room:example.org", "3d8+4", ">bogus")
+        assert result == INVALID_ROLL
+
+    def test_successful_invocation_is_remembered_for_reroll(self):
+        room_id = "!saved-pattern-reroll-room:example.org"
+        build_saved_pattern_command(room_id, "3d8+4 >15", None)
+        parsed = build_dice_command(room_id, "!reroll")
+        assert isinstance(parsed, ParsedRoll)
+        assert [expr for expr, _ in parsed.command.specs] == ["3d8+4"]
+        assert parsed.command.target == Target(operator=">", value=15)

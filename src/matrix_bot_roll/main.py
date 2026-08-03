@@ -1,13 +1,18 @@
 import asyncio
 import logging
 import os
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Union
 
 from nio import AsyncClient, MatrixRoom, RoomMessageText
 
 from matrix_bot_roll import saved_patterns
 from matrix_bot_roll.command_handler import handle
-from matrix_bot_roll.commands import build_dice_command, build_save_command
+from matrix_bot_roll.commands import (
+    ParsedRoll,
+    build_dice_command,
+    build_save_command,
+    build_saved_pattern_command,
+)
 from matrix_bot_roll.formatting import format_detail, markdown_to_html
 from matrix_bot_roll.health_check import serve_health_check
 from matrix_bot_roll.logging_setup import configure_logging
@@ -54,7 +59,7 @@ async def message_callback(
     elif command_name in _SAVE_ALIASES:
         reply = await _handle_save(client, event.sender, body)
     else:
-        parsed = build_dice_command(room.room_id, body)
+        parsed = await _resolve_dice_command(client, room.room_id, event.sender, body)
         if isinstance(parsed, str):
             reply = parsed
         else:
@@ -77,6 +82,42 @@ async def message_callback(
         content=content,
         ignore_unverified_devices=True,
     )
+
+
+async def _resolve_dice_command(
+    client: AsyncClient, room_id: str, user_id: str, body: str
+) -> Union[ParsedRoll, str]:
+    """
+    Build a `!roll`/`!r`/`!reroll`/`!rr` command. Literal dice syntax is tried
+    first via `build_dice_command` — cheap and synchronous — and returned
+    immediately if it parses. Only when that fails (and the command is a bare
+    `!roll`/`!r`, not a `!reroll`/`!rr`) do we consider whether its first
+    argument token is a syntactically legal pattern name (see
+    `saved_patterns.is_valid_name`) that `user_id` has actually saved; if so,
+    that pattern's saved expression is rolled instead. This ordering means an
+    ordinary roll, `--help`, bare usage, or `!reroll` never pays for the
+    account-data lookup, and a name that turns out not to be saved falls back
+    to `build_dice_command`'s original (already-computed) error instead of
+    re-parsing the body a second time.
+    """
+    parsed = build_dice_command(room_id, body)
+    if not isinstance(parsed, str):
+        return parsed
+
+    parts = body.split(maxsplit=1)
+    command_name = parts[0] if parts else ""
+    if command_name in ("!roll", "!r") and len(parts) > 1:
+        name_token, _, override_arg = parts[1].strip().partition(" ")
+        pattern_name = name_token.lower()
+        if saved_patterns.is_valid_name(pattern_name):
+            stored_expr = await saved_patterns.get_pattern(
+                client, user_id, pattern_name
+            )
+            if stored_expr is not None:
+                return build_saved_pattern_command(
+                    room_id, stored_expr, override_arg.strip() or None
+                )
+    return parsed
 
 
 async def _handle_save(client: AsyncClient, user_id: str, body: str) -> str:

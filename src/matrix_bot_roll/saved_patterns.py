@@ -14,7 +14,7 @@ bot's own blob instead of using separate per-user account data.
 
 import logging
 import re
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from nio import AsyncClient
 
@@ -43,6 +43,12 @@ def is_valid_name(name: str) -> bool:
     letter, only letters/`_`/`-` (no digits, so it can never collide with dice
     notation), at most `MAX_PATTERN_NAME_LENGTH` characters."""
     return len(name) <= MAX_PATTERN_NAME_LENGTH and bool(_NAME_RE.match(name))
+
+
+async def get_pattern(client: AsyncClient, user_id: str, name: str) -> Optional[str]:
+    """Fetch `user_id`'s saved expression for `name`, or None if they have no pattern by that name."""
+    all_data = await account_data.get_blob(client, SAVED_PATTERNS_TYPE)
+    return all_data.get("users", {}).get(user_id, {}).get(name)
 
 
 async def save_pattern(client: AsyncClient, user_id: str, name: str, expr: str) -> bool:

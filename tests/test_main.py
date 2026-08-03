@@ -26,23 +26,14 @@ from matrix_bot_roll.messages import (  # noqa: E402
 )
 
 
-def _send_body(room_id: str, body: str) -> str | None:
-    """Run `message_callback` with a stub client/room/event and return the sent reply body, if any."""
-    client = AsyncMock()
-    room = SimpleNamespace(room_id=room_id)
-    event = SimpleNamespace(body=body)
-    asyncio.run(message_callback(client, room, event))
-    if not client.room_send.called:
-        return None
-    return client.room_send.call_args.kwargs["content"]["body"]
-
-
 def _fake_matrix_client(initial_blob=None):
     """
     A fake `AsyncClient` whose `send` serves GET/PUT against an in-memory
     account-data blob, mimicking the real `/user/{id}/account_data/{type}`
-    endpoint (see tests/test_saved_patterns.py's `fake_client`) — needed for
-    `!save`, which persists via `saved_patterns.save_pattern`.
+    endpoint (see tests/test_saved_patterns.py's `fake_client`) — needed by
+    both `!save` (persists via `saved_patterns.save_pattern`) and `!roll
+    <name>` (looks up via `saved_patterns.get_pattern`), so a bare `AsyncMock`
+    client isn't enough for either.
     """
     store = {"data": initial_blob}
 
@@ -68,9 +59,8 @@ def _fake_matrix_client(initial_blob=None):
     return client, store
 
 
-def _send_save_body(room_id, body, sender="@alice:example.invalid", client=None):
-    """Like `_send_body`, but for `!save`: uses `_fake_matrix_client` (roll/reroll/
-    detail don't need account-data I/O, so `_send_body` stays a plain `AsyncMock`)."""
+def _send_body(room_id, body, sender="@alice:example.invalid", client=None):
+    """Run `message_callback` with a fake client/room/event and return the sent reply body, if any."""
     if client is None:
         client, _ = _fake_matrix_client()
     room = SimpleNamespace(room_id=room_id)
@@ -240,30 +230,30 @@ class TestReroll:
 
 class TestSave:
     def test_bare_save_returns_usage(self):
-        assert _send_save_body("!room:example.org", "!save") == SAVE_USAGE
+        assert _send_body("!room:example.org", "!save") == SAVE_USAGE
 
     def test_save_with_only_a_name_returns_usage(self):
-        assert _send_save_body("!room:example.org", "!save attack") == SAVE_USAGE
+        assert _send_body("!room:example.org", "!save attack") == SAVE_USAGE
 
     def test_s_alias_saves(self):
-        output = _send_save_body("!room:example.org", "!s attack 3d8+4")
+        output = _send_body("!room:example.org", "!s attack 3d8+4")
         assert output == pattern_saved("attack", "3d8+4")
 
     def test_valid_save_confirms(self):
-        output = _send_save_body("!room:example.org", "!save attack 3d8+4")
+        output = _send_body("!room:example.org", "!save attack 3d8+4")
         assert output == pattern_saved("attack", "3d8+4")
 
     def test_invalid_name_returns_error(self):
-        output = _send_save_body("!room:example.org", "!save 1attack 3d8+4")
+        output = _send_body("!room:example.org", "!save 1attack 3d8+4")
         assert output == invalid_pattern_name("1attack")
 
     def test_invalid_expression_returns_error(self):
-        output = _send_save_body("!room:example.org", "!save attack bogus")
+        output = _send_body("!room:example.org", "!save attack bogus")
         assert output == invalid_expr("bogus", "not a recognized dice expression")
 
     def test_save_persists_under_the_sender(self):
         client, store = _fake_matrix_client()
-        _send_save_body(
+        _send_body(
             "!room:example.org",
             "!save attack 3d8+4",
             sender="@alice:example.invalid",
@@ -274,13 +264,13 @@ class TestSave:
 
     def test_different_senders_do_not_share_patterns(self):
         client, store = _fake_matrix_client()
-        _send_save_body(
+        _send_body(
             "!room:example.org",
             "!save attack 3d8+4",
             sender="@alice:example.invalid",
             client=client,
         )
-        _send_save_body(
+        _send_body(
             "!room:example.org",
             "!save attack 1d20+7",
             sender="@bob:example.invalid",
@@ -298,13 +288,98 @@ class TestSave:
             }
         }
         client, _ = _fake_matrix_client(initial_blob=initial_blob)
-        output = _send_save_body(
+        output = _send_body(
             "!room:example.org",
             "!save one-too-many 1d20",
             sender="@alice:example.invalid",
             client=client,
         )
         assert output == pattern_save_limit_reached("one-too-many")
+
+
+class TestRollSavedPattern:
+    def test_rolls_the_saved_expression_by_name(self):
+        initial_blob = {"users": {"@alice:example.invalid": {"attack": "3d8+4"}}}
+        client, _ = _fake_matrix_client(initial_blob=initial_blob)
+        output = _send_body(
+            "!room:example.org",
+            "!roll attack",
+            sender="@alice:example.invalid",
+            client=client,
+        )
+        assert "🎲 3d8+4" in output
+
+    def test_r_alias_rolls_the_saved_expression(self):
+        initial_blob = {"users": {"@alice:example.invalid": {"attack": "3d8+4"}}}
+        client, _ = _fake_matrix_client(initial_blob=initial_blob)
+        output = _send_body(
+            "!room:example.org",
+            "!r attack",
+            sender="@alice:example.invalid",
+            client=client,
+        )
+        assert "🎲 3d8+4" in output
+
+    def test_unsaved_name_falls_through_to_a_literal_expression(self):
+        """No saved pattern named `attack` for this sender — falls back to the
+        usual (invalid) dice-expression parsing, unchanged from before `!roll
+        <name>` existed."""
+        client, _ = _fake_matrix_client()
+        output = _send_body(
+            "!room:example.org",
+            "!roll attack",
+            sender="@alice:example.invalid",
+            client=client,
+        )
+        assert output == invalid_expr("attack", "not a recognized dice expression")
+
+    def test_lookup_is_scoped_to_the_sender(self):
+        initial_blob = {"users": {"@bob:example.invalid": {"attack": "1d20+7"}}}
+        client, _ = _fake_matrix_client(initial_blob=initial_blob)
+        output = _send_body(
+            "!room:example.org",
+            "!roll attack",
+            sender="@alice:example.invalid",
+            client=client,
+        )
+        assert output == invalid_expr("attack", "not a recognized dice expression")
+
+    def test_stored_target_and_message_are_replayed(self):
+        initial_blob = {
+            "users": {"@alice:example.invalid": {"attack": "3d8+4 >15 | Fireball"}}
+        }
+        client, _ = _fake_matrix_client(initial_blob=initial_blob)
+        output = _send_body(
+            "!room:example.org",
+            "!roll attack",
+            sender="@alice:example.invalid",
+            client=client,
+        )
+        assert ">15" in output
+        assert "💬 Fireball" in output
+
+    def test_override_target_on_invocation(self):
+        initial_blob = {"users": {"@alice:example.invalid": {"attack": "3d8+4 >15"}}}
+        client, _ = _fake_matrix_client(initial_blob=initial_blob)
+        output = _send_body(
+            "!room:example.org",
+            "!roll attack >10",
+            sender="@alice:example.invalid",
+            client=client,
+        )
+        assert ">10" in output
+
+    def test_invoked_roll_is_remembered_for_reroll(self):
+        initial_blob = {"users": {"@alice:example.invalid": {"attack": "3d8+4"}}}
+        client, _ = _fake_matrix_client(initial_blob=initial_blob)
+        room_id = "!saved-pattern-reroll-room:example.org"
+        _send_body(
+            room_id, "!roll attack", sender="@alice:example.invalid", client=client
+        )
+        output = _send_body(
+            room_id, "!reroll", sender="@alice:example.invalid", client=client
+        )
+        assert "🎲 3d8+4" in output
 
 
 class TestMessageCallbackDispatch:

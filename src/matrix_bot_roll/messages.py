@@ -9,6 +9,8 @@ USAGE = "\n".join(
     [
         "• `!roll <expression> [expression ...] [target] [-v] [| message]` "
         "(or `!r`) — roll dice",
+        "• `!roll <saved name> [target] [-v] [| message]` — roll a pattern you "
+        "saved with `!save`",
         "• `!roll --help` — detailed roll syntax and examples",
         "• `!reroll [target] [-v] [| message]` (or `!rr`) — repeat the last roll "
         "(always terse unless `-v` is given here)",
@@ -37,6 +39,9 @@ ROLL_HELP = "\n".join(
         "(terse by default); the flag can go anywhere in the command",
         "• `!reroll -v` — repeat the last roll verbosely; a reroll never inherits "
         "the original roll's own `-v`, so add it again if you want it",
+        "• `!roll attack`, `!roll attack >15`, `!roll attack -v | Fireball` "
+        "— roll a pattern saved with `!save attack <expression>` instead of "
+        "retyping it, optionally overriding its target/verbose/message",
     ]
 )
 

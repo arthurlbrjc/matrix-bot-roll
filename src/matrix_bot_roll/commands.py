@@ -120,30 +120,9 @@ def _build_reroll_command(room_id: str, arg: Optional[str]) -> Union[ParsedRoll,
     stored = _last_rolls.get(room_id)
     if stored is None:
         return NO_PREVIOUS_ROLL
-    if not arg:
-        return _parse_command(_strip_verbose_flags(stored))
-
-    prefix, separator, message = arg.partition("|")
-    prefix_tokens = prefix.split()
-    verbose = any(token.lower() in VERBOSE_FLAGS for token in prefix_tokens)
-    target_tokens = [
-        token for token in prefix_tokens if token.lower() not in VERBOSE_FLAGS
-    ]
-    if len(target_tokens) > 1 or (
-        target_tokens and _parse_target(target_tokens[0]) is None
-    ):
-        return INVALID_ROLL
-
-    new_arg = _apply_reroll_overrides(
-        stored,
-        target_tokens[0] if target_tokens else None,
-        verbose,
-        bool(separator),
-        message,
-    )
-    result = _parse_command(new_arg)
+    result, resolved = _parse_with_overrides(stored, arg)
     if isinstance(result, ParsedRoll):
-        _last_rolls[room_id] = new_arg
+        _last_rolls[room_id] = resolved
     return result
 
 
@@ -174,6 +153,60 @@ def build_save_command(body: str) -> Union[SaveCommand, str]:
         return result
 
     return SaveCommand(name=name, expr=expr)
+
+
+def build_saved_pattern_command(
+    room_id: str, stored_expr: str, override_arg: Optional[str]
+) -> Union[ParsedRoll, str]:
+    """
+    Build a `ParsedRoll` for invoking a saved pattern by name
+    (`!roll <name> [target] [-v] [| message]`): `stored_expr` is that
+    pattern's saved expression (see `saved_patterns.py`), and `override_arg`
+    is the optional trailing text after the name — same target/verbose/message
+    override syntax `!reroll` accepts (see `_parse_with_overrides`). A
+    successful roll is remembered for a later bare `!reroll`, exactly like a
+    typed expression.
+    """
+    result, resolved = _parse_with_overrides(stored_expr, override_arg)
+    if isinstance(result, ParsedRoll):
+        _last_rolls[room_id] = resolved
+    return result
+
+
+def _parse_with_overrides(
+    stored: str, arg: Optional[str]
+) -> Tuple[Union[ParsedRoll, str], str]:
+    """
+    Parse `stored` (a previously validated roll-argument string), optionally
+    overriding its target/verbose/message from `arg` — the same syntax
+    accepted after `!reroll` and after a saved-pattern name in
+    `!roll <name> ...`. Returns the parse result alongside the resolved
+    argument string that was actually parsed, so callers can remember it as
+    the room's last roll on success.
+    """
+    if not arg:
+        resolved = _strip_verbose_flags(stored)
+        return _parse_command(resolved), resolved
+
+    prefix, separator, message = arg.partition("|")
+    prefix_tokens = prefix.split()
+    verbose = any(token.lower() in VERBOSE_FLAGS for token in prefix_tokens)
+    target_tokens = [
+        token for token in prefix_tokens if token.lower() not in VERBOSE_FLAGS
+    ]
+    if len(target_tokens) > 1 or (
+        target_tokens and _parse_target(target_tokens[0]) is None
+    ):
+        return INVALID_ROLL, stored
+
+    resolved = _apply_reroll_overrides(
+        stored,
+        target_tokens[0] if target_tokens else None,
+        verbose,
+        bool(separator),
+        message,
+    )
+    return _parse_command(resolved), resolved
 
 
 def _apply_reroll_overrides(
