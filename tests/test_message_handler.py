@@ -1,4 +1,4 @@
-"""Unit tests for the `!roll`/`!reroll`/`!save` message handling in main.py."""
+"""Unit tests for the `!roll`/`!reroll`/`!save` message handling in message_handler.py."""
 
 import asyncio
 import json
@@ -13,7 +13,7 @@ os.environ.setdefault("MATRIX_DEVICE_NAME", "matrix-bot-roll-test")
 os.environ.setdefault("MATRIX_STORE_PATH", "/tmp/matrix-bot-roll-test-store")
 
 from matrix_bot_roll.constants import MAX_SAVED_PATTERNS_PER_USER  # noqa: E402
-from matrix_bot_roll.main import message_callback  # noqa: E402
+from matrix_bot_roll.message_handler import handle_room_message  # noqa: E402
 from matrix_bot_roll.messages import (  # noqa: E402
     FORGET_USAGE,
     NO_PREVIOUS_ROLL,
@@ -64,12 +64,12 @@ def _fake_matrix_client(initial_blob=None):
 
 
 def _send_body(room_id, body, sender="@alice:example.invalid", client=None):
-    """Run `message_callback` with a fake client/room/event and return the sent reply body, if any."""
+    """Run `handle_room_message` with a fake client/room/event and return the sent reply body, if any."""
     if client is None:
         client, _ = _fake_matrix_client()
     room = SimpleNamespace(room_id=room_id)
     event = SimpleNamespace(body=body, sender=sender)
-    asyncio.run(message_callback(client, room, event))
+    asyncio.run(handle_room_message(client, room, event))
     if not client.room_send.called:
         return None
     return client.room_send.call_args.kwargs["content"]["body"]
