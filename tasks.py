@@ -139,14 +139,6 @@ def clean(c):
         )
 
 
-@task
-def pingtest(c):
-    c.run(
-        "python3 -c \"import time; print('start'); time.sleep(30); print('end')\"",
-        pty=True,
-    )
-
-
 @task(
     help={
         "release": "Target release, must be a valid semver string or a valid bump rule. Default to patch"

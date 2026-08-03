@@ -44,6 +44,7 @@ def format_detail(result: DiceRollResult) -> str:
 
 
 def _join_kept(kept: List[Die], result: DiceRollResult) -> str:
+    """Render the comma-separated list of kept dice shown in the keep/advantage suffix."""
     return ", ".join(_kept_repr(d, result) for d in kept)
 
 
@@ -63,6 +64,7 @@ def _kept_repr(die: Die, result: DiceRollResult) -> str:
 
 
 def _mark(n: int, sides: int) -> str:
+    """Render a raw die face, suffixed with 🎯/💥 if it's the max/min possible face on a die with `sides` sides."""
     if n == sides:
         return f"{n}🎯"
     elif n == 1:
