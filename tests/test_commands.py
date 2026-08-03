@@ -4,6 +4,7 @@ import pytest
 
 from matrix_bot_roll import commands
 from matrix_bot_roll.commands import (
+    ListSavedCommand,
     ParsedRoll,
     RollCommand,
     SaveCommand,
@@ -530,6 +531,19 @@ class TestBuildSaveCommand:
     def test_extra_whitespace_around_expression_is_stripped(self):
         result = build_save_command("!save attack   3d8+4  ")
         assert result == SaveCommand(name="attack", expr="3d8+4")
+
+    def test_list_flag_returns_list_saved_command(self):
+        assert build_save_command("!save --list") == ListSavedCommand()
+
+    def test_list_flag_with_extra_whitespace_returns_list_saved_command(self):
+        assert build_save_command("!save   --list  ") == ListSavedCommand()
+
+    def test_list_flag_with_trailing_args_is_not_treated_as_list(self):
+        """`--list` must be the whole argument, not just the first token, so
+        this falls through to ordinary name/expr parsing (and fails name
+        validation, since `--list` isn't a legal pattern name)."""
+        result = build_save_command("!save --list foo")
+        assert result == invalid_pattern_name("--list")
 
 
 class TestBuildSavedPatternCommand:

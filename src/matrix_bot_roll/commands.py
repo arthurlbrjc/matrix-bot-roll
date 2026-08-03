@@ -72,6 +72,11 @@ class SaveCommand:
     expr: str
 
 
+@dataclass
+class ListSavedCommand:
+    """A fully parsed `!save --list` request — no fields, it just signals the caller to fetch and format the sender's saved patterns."""
+
+
 def build_dice_command(room_id: str, body: str) -> Union[ParsedRoll, str]:
     """
     Parse a full `!roll`/`!r`/`!reroll`/`!rr` message body.
@@ -122,19 +127,24 @@ def _build_reroll_command(room_id: str, arg: Optional[str]) -> Union[ParsedRoll,
     return result
 
 
-def build_save_command(body: str) -> Union[SaveCommand, str]:
+def build_save_command(body: str) -> Union[SaveCommand, ListSavedCommand, str]:
     """
     Parse a full `!save <name> <expr...>` message body: validate the pattern
     name, then validate `<expr...>` using the same syntax `!roll` accepts
     (target/message/verbose flags included). The expression is kept as-is
     (see `SaveCommand`) — only its validity is checked here, not its parsed
-    form.
+    form. `!save --list` is handled first (mirroring `!roll --help`) and
+    returns a `ListSavedCommand` instead, since listing needs no name/expr.
 
     Kept separate from `build_dice_command` — a save is a write with its own
     reply shape, not another kind of roll — so callers that only handle
     `!roll`/`!reroll` (i.e. everywhere until `!save` is wired up) are
     unaffected by this command existing.
     """
+    first_arg = body.split(maxsplit=1)
+    if len(first_arg) > 1 and first_arg[1].strip() == "--list":
+        return ListSavedCommand()
+
     parts = body.split(maxsplit=2)
     if len(parts) < 3:
         return SAVE_USAGE

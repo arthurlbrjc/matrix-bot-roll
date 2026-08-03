@@ -23,6 +23,7 @@ from matrix_bot_roll.messages import (  # noqa: E402
     invalid_pattern_name,
     pattern_save_limit_reached,
     pattern_saved,
+    saved_patterns_list,
 )
 
 
@@ -295,6 +296,45 @@ class TestSave:
             client=client,
         )
         assert output == pattern_save_limit_reached("one-too-many")
+
+    def test_list_with_no_saved_patterns_returns_empty_list_message(self):
+        output = _send_body(
+            "!room:example.org", "!save --list", sender="@alice:example.invalid"
+        )
+        assert output == saved_patterns_list({})
+
+    def test_list_returns_the_senders_saved_patterns(self):
+        initial_blob = {
+            "users": {
+                "@alice:example.invalid": {"attack": "3d8+4", "defend": "1d20+2"},
+                "@bob:example.invalid": {"attack": "1d20+7"},
+            }
+        }
+        client, _ = _fake_matrix_client(initial_blob=initial_blob)
+        output = _send_body(
+            "!room:example.org",
+            "!save --list",
+            sender="@alice:example.invalid",
+            client=client,
+        )
+        assert output == saved_patterns_list({"attack": "3d8+4", "defend": "1d20+2"})
+
+    def test_list_escapes_backticks_in_saved_expressions(self):
+        """A saved expression's message part isn't restricted from containing
+        backticks, so `!save --list` must escape them like `pattern_saved`
+        does, or they'd break the Markdown code span."""
+        initial_blob = {
+            "users": {"@alice:example.invalid": {"trick": "1d6 | say `boom`"}}
+        }
+        client, _ = _fake_matrix_client(initial_blob=initial_blob)
+        output = _send_body(
+            "!room:example.org",
+            "!save --list",
+            sender="@alice:example.invalid",
+            client=client,
+        )
+        assert "`boom`" not in output
+        assert "'boom'" in output
 
 
 class TestRollSavedPattern:

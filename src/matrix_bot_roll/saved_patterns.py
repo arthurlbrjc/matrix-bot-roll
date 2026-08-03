@@ -51,6 +51,12 @@ async def get_pattern(client: AsyncClient, user_id: str, name: str) -> Optional[
     return all_data.get("users", {}).get(user_id, {}).get(name)
 
 
+async def list_patterns(client: AsyncClient, user_id: str) -> Dict[str, str]:
+    """Fetch every pattern name/expression `user_id` has saved, or an empty dict if they have none."""
+    all_data = await account_data.get_blob(client, SAVED_PATTERNS_TYPE)
+    return all_data.get("users", {}).get(user_id, {})
+
+
 async def save_pattern(client: AsyncClient, user_id: str, name: str, expr: str) -> bool:
     """
     Add `name` for `user_id`, or overwrite it if already saved.

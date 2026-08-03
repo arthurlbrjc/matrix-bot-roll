@@ -122,6 +122,42 @@ def test_get_pattern_does_not_leak_across_users():
     assert asyncio.run(run()) == "1d20+7"
 
 
+def test_list_patterns_returns_empty_dict_when_nothing_saved():
+    client, _ = fake_client(initial_blob=None)
+
+    async def run():
+        return await saved_patterns.list_patterns(client, "@alice:example.invalid")
+
+    assert asyncio.run(run()) == {}
+
+
+def test_list_patterns_returns_the_saved_patterns():
+    initial_blob = {
+        "users": {"@alice:example.invalid": {"attack": "3d8+4", "defend": "1d20+2"}}
+    }
+    client, _ = fake_client(initial_blob=initial_blob)
+
+    async def run():
+        return await saved_patterns.list_patterns(client, "@alice:example.invalid")
+
+    assert asyncio.run(run()) == {"attack": "3d8+4", "defend": "1d20+2"}
+
+
+def test_list_patterns_does_not_leak_across_users():
+    initial_blob = {
+        "users": {
+            "@alice:example.invalid": {"attack": "3d8+4"},
+            "@bob:example.invalid": {"attack": "1d20+7"},
+        }
+    }
+    client, _ = fake_client(initial_blob=initial_blob)
+
+    async def run():
+        return await saved_patterns.list_patterns(client, "@bob:example.invalid")
+
+    assert asyncio.run(run()) == {"attack": "1d20+7"}
+
+
 def test_save_pattern_then_stores_it():
     client, store = fake_client(initial_blob=None)
 

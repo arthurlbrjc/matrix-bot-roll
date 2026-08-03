@@ -1,5 +1,7 @@
 """User-facing reply strings sent back to Matrix rooms."""
 
+from typing import Dict
+
 from matrix_bot_roll.constants import (
     MAX_PATTERN_NAME_LENGTH,
     MAX_SAVED_PATTERNS_PER_USER,
@@ -13,6 +15,7 @@ USAGE = "\n".join(
         "• `!roll --help` — detailed roll syntax and examples",
         "• `!save <name> <expression> [target] [-v] [| message]` (or `!s`) "
         "— save a roll pattern to reuse with `!roll <name>`",
+        "• `!save --list` — list your saved patterns",
         "• `!reroll [target] [-v] [| message]` (or `!rr`) — repeat the last roll "
         "(always terse unless `-v` is given here)",
         "• `!detail` (or `!d`) — show the full breakdown of the last roll in this room",
@@ -46,7 +49,11 @@ INVALID_ROLL = "Invalid roll expression — see `!roll --help` for syntax."
 
 SAVE_USAGE = (
     "Usage: `!save <name> <expression> [target] [-v] [| message]` (or `!s`) "
-    "— e.g. `!save attack 3d8+4`."
+    "— e.g. `!save attack 3d8+4`. Use `!save --list` to list your saved patterns."
+)
+
+NO_SAVED_PATTERNS = (
+    "You have no saved patterns yet — use `!save <name> <expression>` to save one."
 )
 
 
@@ -89,3 +96,18 @@ def pattern_save_limit_reached(name: str) -> str:
         f"Can't save `{name}` — you already have the maximum of "
         f"{MAX_SAVED_PATTERNS_PER_USER} saved patterns."
     )
+
+
+def saved_patterns_list(patterns: Dict[str, str]) -> str:
+    """Build a `!save --list` reply: one `name` — expression bullet per saved
+    pattern, sorted alphabetically by name, or `NO_SAVED_PATTERNS` if the
+    caller has none."""
+    if not patterns:
+        return NO_SAVED_PATTERNS
+    lines = ["📋 Saved patterns:"]
+    for name in sorted(patterns):
+        safe_expr = patterns[name].replace(
+            "`", "'"
+        )  # backticks would break the Markdown code span
+        lines.append(f"• `{name}` — {safe_expr}")
+    return "\n".join(lines)

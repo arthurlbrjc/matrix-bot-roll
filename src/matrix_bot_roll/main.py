@@ -8,6 +8,7 @@ from nio import AsyncClient, MatrixRoom, RoomMessageText
 from matrix_bot_roll import saved_patterns
 from matrix_bot_roll.command_handler import handle
 from matrix_bot_roll.commands import (
+    ListSavedCommand,
     ParsedRoll,
     build_dice_command,
     build_save_command,
@@ -21,6 +22,7 @@ from matrix_bot_roll.messages import (
     NO_PREVIOUS_ROLL,
     pattern_save_limit_reached,
     pattern_saved,
+    saved_patterns_list,
 )
 from matrix_bot_roll.models import DiceRollResult, RollResult
 
@@ -121,10 +123,13 @@ async def _resolve_dice_command(
 
 
 async def _handle_save(client: AsyncClient, user_id: str, body: str) -> str:
-    """Parse and persist a `!save` command, returning the reply text."""
+    """Parse and persist a `!save` command, or list `user_id`'s saved patterns for `!save --list`, returning the reply text."""
     parsed = build_save_command(body)
     if isinstance(parsed, str):
         return parsed
+    if isinstance(parsed, ListSavedCommand):
+        patterns = await saved_patterns.list_patterns(client, user_id)
+        return saved_patterns_list(patterns)
 
     saved = await saved_patterns.save_pattern(client, user_id, parsed.name, parsed.expr)
     if not saved:
