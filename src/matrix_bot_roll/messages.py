@@ -3,15 +3,16 @@
 from matrix_bot_roll.constants import (
     MAX_PATTERN_NAME_LENGTH,
     MAX_SAVED_PATTERNS_PER_USER,
+    VERBOSE_FLAGS,
 )
 
 USAGE = "\n".join(
     [
-        "• `!roll <expression> [expression ...] [target] [-v] [| message]` "
-        "(or `!r`) — roll dice",
-        "• `!roll <saved name> [target] [-v] [| message]` — roll a pattern you "
-        "saved with `!save`",
+        "• `!roll (<expression> [expression ...] | <saved name>) [target] [-v] "
+        "[| message]` (or `!r`) — roll dice",
         "• `!roll --help` — detailed roll syntax and examples",
+        "• `!save <name> <expression> [target] [-v] [| message]` (or `!s`) "
+        "— save a roll pattern to reuse with `!roll <name>`",
         "• `!reroll [target] [-v] [| message]` (or `!rr`) — repeat the last roll "
         "(always terse unless `-v` is given here)",
         "• `!detail` (or `!d`) — show the full breakdown of the last roll in this room",
@@ -20,28 +21,22 @@ USAGE = "\n".join(
 
 ROLL_HELP = "\n".join(
     [
-        "**!roll <expression> [expression ...] [target] [-v] [| message]** "
-        "(alias: `!r`)",
+        "**!roll (<expression> [expression ...] | <saved name>) [target] [-v] "
+        "[| message]** (alias: `!r`)",
         "",
-        "• `!roll d20` — roll one die",
-        "• `!roll 4d6` — roll multiple dice",
+        "• `!roll d20`, `!roll 4d6` — roll dice",
         "• `!roll 2d6+4` — add +/- modifiers",
         "• `!roll 4d6kh3`, `!roll 4d6kl3` — keep highest/lowest dice",
         "• `!roll 2d20adv`, `!roll 2d20dis` — advantage/disadvantage "
         "(add one die then keep X highest/lowest)",
         "• `!roll 4(d10+2)`, `!roll 4(d10+2)kh1`, `!roll 2(d20+3)adv` "
         "— per-die modifier and adv/dis/kh/kl",
-        "• `!roll 2d6kh1+4 3(d10-2)adv` — combine everything",
         "• `!roll d20+5 >15` — compare the total against a target number "
         "(`>`, `<`, `>=`, `<=`, `=`, `!=`) for pass/fail",
         "• `!roll 3d8+4 | attack` — attach a message to the roll",
         "• `!roll 4d6kh3 -v` (or `--verbose`) — show the full per-die breakdown "
         "(terse by default); the flag can go anywhere in the command",
-        "• `!reroll -v` — repeat the last roll verbosely; a reroll never inherits "
-        "the original roll's own `-v`, so add it again if you want it",
-        "• `!roll attack`, `!roll attack >15`, `!roll attack -v | Fireball` "
-        "— roll a pattern saved with `!save attack <expression>` instead of "
-        "retyping it, optionally overriding its target/verbose/message",
+        "• `!roll attack` — roll a pattern saved with `!save`",
     ]
 )
 
@@ -66,16 +61,26 @@ def invalid_pattern_name(name: str) -> str:
     safe_name = name.replace("`", "'")  # backticks would break the Markdown code span
     return (
         f"Invalid pattern name `{safe_name}` — must start with a lowercase letter "
-        f"and contain only lowercase letters, `_`, or `-` (no digits, so it can't "
-        f"collide with dice notation like `d20`), max {MAX_PATTERN_NAME_LENGTH} "
+        f"and contain only lowercase letters, `_`, or `-`, max {MAX_PATTERN_NAME_LENGTH} "
         f"characters."
     )
 
 
 def pattern_saved(name: str, expr: str) -> str:
-    """Build a confirmation reply for a successful `!save`."""
-    safe_expr = expr.replace("`", "'")  # backticks would break the Markdown code span
-    return f"✅ Saved `{name}` = `{safe_expr}`."
+    """Build a confirmation reply for a successful `!save`, showing the dice
+    pattern and (if any) the saved message on their own lines, with the
+    `-v`/`--verbose` flag dropped since it isn't part of what's remembered."""
+    dice_part, _, message = expr.partition("|")
+    dice_tokens = [
+        token for token in dice_part.split() if token.lower() not in VERBOSE_FLAGS
+    ]
+    safe_dice = " ".join(dice_tokens).replace("`", "'")
+    lines = [f"✅ Saved `{name}`:", f"`{safe_dice}`"]
+    message = message.strip()
+    if message:
+        safe_message = message.replace("`", "'")
+        lines.append(f"`{safe_message}`")
+    return "\n".join(lines)
 
 
 def pattern_save_limit_reached(name: str) -> str:

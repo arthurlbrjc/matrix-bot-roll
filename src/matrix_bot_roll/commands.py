@@ -2,7 +2,7 @@ import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, Union, cast
 
-from matrix_bot_roll.constants import MAX_DICE_COUNT, MAX_DICE_SIDES
+from matrix_bot_roll.constants import MAX_DICE_COUNT, MAX_DICE_SIDES, VERBOSE_FLAGS
 from matrix_bot_roll.messages import (
     INVALID_ROLL,
     NO_PREVIOUS_ROLL,
@@ -34,10 +34,6 @@ DICE_WITH_DIE_MODIFIER_RE = re.compile(
 # on the line (see `_parse_command`). May appear anywhere among the
 # space-separated tokens, like the verbose flag.
 TARGET_RE = re.compile(r"^(>=|<=|!=|>|<|=)(-?\d+)$")
-
-# The verbose flag may appear anywhere among the space-separated tokens (like
-# a normal CLI flag), rather than in a fixed position.
-VERBOSE_FLAGS = {"-v", "--verbose"}
 
 _last_rolls: Dict[str, str] = {}
 

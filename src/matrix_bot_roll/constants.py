@@ -10,3 +10,5 @@ MAX_DICE_SIDES = int(os.environ.get("MAX_DICE_SIDES", 100))
 # of that budget one user can claim, so one heavy user can't lock the rest out.
 MAX_SAVED_PATTERNS_PER_USER = int(os.environ.get("MAX_SAVED_PATTERNS_PER_USER", 25))
 MAX_PATTERN_NAME_LENGTH = int(os.environ.get("MAX_PATTERN_NAME_LENGTH", 32))
+
+VERBOSE_FLAGS = {"-v", "--verbose"}
