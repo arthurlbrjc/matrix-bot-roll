@@ -11,6 +11,7 @@ from matrix_bot_roll.commands import (
     ListSavedCommand,
     ParsedRoll,
     build_dice_command,
+    build_forget_command,
     build_save_command,
     build_saved_pattern_command,
 )
@@ -20,6 +21,8 @@ from matrix_bot_roll.logging_setup import configure_logging
 from matrix_bot_roll.matrix_client import run_client
 from matrix_bot_roll.messages import (
     NO_PREVIOUS_ROLL,
+    pattern_forgotten,
+    pattern_not_found,
     pattern_save_limit_reached,
     pattern_saved,
     saved_patterns_list,
@@ -41,6 +44,7 @@ _last_details: Dict[str, Tuple[RollResult, Optional[str]]] = {}
 _ROLL_ALIASES = ("!roll", "!r", "!reroll", "!rr")
 _DETAIL_ALIASES = ("!detail", "!d")
 _SAVE_ALIASES = ("!save", "!s")
+_FORGET_ALIASES = ("!forget", "!f")
 
 
 async def message_callback(
@@ -48,7 +52,12 @@ async def message_callback(
 ):
     body = event.body.strip()
     command_name = body.split(maxsplit=1)[0] if body else ""
-    if command_name not in (*_ROLL_ALIASES, *_DETAIL_ALIASES, *_SAVE_ALIASES):
+    if command_name not in (
+        *_ROLL_ALIASES,
+        *_DETAIL_ALIASES,
+        *_SAVE_ALIASES,
+        *_FORGET_ALIASES,
+    ):
         return
 
     if command_name in _DETAIL_ALIASES:
@@ -60,6 +69,8 @@ async def message_callback(
             reply = _format_result(result, verbose=True, message=message)
     elif command_name in _SAVE_ALIASES:
         reply = await _handle_save(client, event.sender, body)
+    elif command_name in _FORGET_ALIASES:
+        reply = await _handle_forget(client, event.sender, body)
     else:
         parsed = await _resolve_dice_command(client, room.room_id, event.sender, body)
         if isinstance(parsed, str):
@@ -135,6 +146,18 @@ async def _handle_save(client: AsyncClient, user_id: str, body: str) -> str:
     if not saved:
         return pattern_save_limit_reached(parsed.name)
     return pattern_saved(parsed.name, parsed.expr)
+
+
+async def _handle_forget(client: AsyncClient, user_id: str, body: str) -> str:
+    """Parse and delete a `!forget` command, returning the reply text."""
+    parsed = build_forget_command(body)
+    if isinstance(parsed, str):
+        return parsed
+
+    forgotten = await saved_patterns.forget_pattern(client, user_id, parsed.name)
+    if not forgotten:
+        return pattern_not_found(parsed.name)
+    return pattern_forgotten(parsed.name)
 
 
 def _format_result(result: RollResult, verbose: bool, message: Optional[str]) -> str:

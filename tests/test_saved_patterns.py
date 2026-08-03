@@ -265,3 +265,65 @@ def test_save_pattern_overwrite_at_the_cap_still_succeeds():
     patterns = user_patterns(store, "@alice:example.invalid")
     assert patterns["pattern0"] == "2d6+1"
     assert len(patterns) == MAX_SAVED_PATTERNS_PER_USER
+
+
+def test_forget_pattern_removes_existing_name():
+    client, store = fake_client(initial_blob=None)
+
+    async def run():
+        await saved_patterns.save_pattern(
+            client, "@alice:example.invalid", "attack", "3d8+4"
+        )
+        return await saved_patterns.forget_pattern(
+            client, "@alice:example.invalid", "attack"
+        )
+
+    forgotten = asyncio.run(run())
+    assert forgotten is True
+    assert user_patterns(store, "@alice:example.invalid") == {}
+
+
+def test_forget_pattern_returns_false_for_unknown_name():
+    client, _ = fake_client(initial_blob=None)
+
+    async def run():
+        return await saved_patterns.forget_pattern(
+            client, "@alice:example.invalid", "attack"
+        )
+
+    forgotten = asyncio.run(run())
+    assert forgotten is False
+
+
+def test_forget_pattern_skips_the_write_when_nothing_to_remove():
+    client, _ = fake_client(initial_blob=None)
+
+    async def run():
+        return await saved_patterns.forget_pattern(
+            client, "@alice:example.invalid", "attack"
+        )
+
+    forgotten = asyncio.run(run())
+    assert forgotten is False
+    put_calls = [call for call in client.send.call_args_list if call.args[0] == "PUT"]
+    assert put_calls == []
+
+
+def test_forget_pattern_does_not_leak_across_users():
+    client, store = fake_client(initial_blob=None)
+
+    async def run():
+        await saved_patterns.save_pattern(
+            client, "@alice:example.invalid", "attack", "3d8+4"
+        )
+        await saved_patterns.save_pattern(
+            client, "@bob:example.invalid", "attack", "1d20+7"
+        )
+        return await saved_patterns.forget_pattern(
+            client, "@alice:example.invalid", "attack"
+        )
+
+    forgotten = asyncio.run(run())
+    assert forgotten is True
+    assert user_patterns(store, "@alice:example.invalid") == {}
+    assert user_patterns(store, "@bob:example.invalid") == {"attack": "1d20+7"}

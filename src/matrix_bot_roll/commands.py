@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Tuple, Union, cast
 
 from matrix_bot_roll.constants import MAX_DICE_COUNT, MAX_DICE_SIDES, VERBOSE_FLAGS
 from matrix_bot_roll.messages import (
+    FORGET_USAGE,
     INVALID_ROLL,
     NO_PREVIOUS_ROLL,
     ROLL_HELP,
@@ -75,6 +76,13 @@ class SaveCommand:
 @dataclass
 class ListSavedCommand:
     """A fully parsed `!save --list` request — no fields, it just signals the caller to fetch and format the sender's saved patterns."""
+
+
+@dataclass
+class ForgetCommand:
+    """A fully parsed and validated `!forget <name>` request, ready for the caller to delete."""
+
+    name: str
 
 
 def build_dice_command(room_id: str, body: str) -> Union[ParsedRoll, str]:
@@ -177,6 +185,24 @@ def build_saved_pattern_command(
     if isinstance(result, ParsedRoll):
         _last_rolls[room_id] = resolved
     return result
+
+
+def build_forget_command(body: str) -> Union[ForgetCommand, str]:
+    """
+    Parse a full `!forget <name>` message body: just a pattern name, validated
+    the same way `!save` validates one. Whether that name is actually saved by
+    the caller is left to the caller of this function — this is pure syntax
+    validation, no account-data lookup.
+    """
+    parts = body.split(maxsplit=1)
+    if len(parts) < 2:
+        return FORGET_USAGE
+
+    name = parts[1].strip().lower()
+    if not is_valid_name(name):
+        return invalid_pattern_name(name)
+
+    return ForgetCommand(name=name)
 
 
 def _parse_with_overrides(

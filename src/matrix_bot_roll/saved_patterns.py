@@ -14,7 +14,7 @@ bot's own blob instead of using separate per-user account data.
 
 import logging
 import re
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
 
 from nio import AsyncClient
 
@@ -47,14 +47,13 @@ def is_valid_name(name: str) -> bool:
 
 async def get_pattern(client: AsyncClient, user_id: str, name: str) -> Optional[str]:
     """Fetch `user_id`'s saved expression for `name`, or None if they have no pattern by that name."""
-    all_data = await account_data.get_blob(client, SAVED_PATTERNS_TYPE)
-    return all_data.get("users", {}).get(user_id, {}).get(name)
+    patterns = await account_data.get_for_user(client, SAVED_PATTERNS_TYPE, user_id)
+    return patterns.get(name)
 
 
 async def list_patterns(client: AsyncClient, user_id: str) -> Dict[str, str]:
     """Fetch every pattern name/expression `user_id` has saved, or an empty dict if they have none."""
-    all_data = await account_data.get_blob(client, SAVED_PATTERNS_TYPE)
-    return all_data.get("users", {}).get(user_id, {})
+    return await account_data.get_for_user(client, SAVED_PATTERNS_TYPE, user_id)
 
 
 async def save_pattern(client: AsyncClient, user_id: str, name: str, expr: str) -> bool:
@@ -74,9 +73,7 @@ async def save_pattern(client: AsyncClient, user_id: str, name: str, expr: str) 
     need real locking (or a different store) before running more than one
     instance.
     """
-    all_data = await account_data.get_blob(client, SAVED_PATTERNS_TYPE)
-    users = all_data.setdefault("users", {})
-    patterns = users.get(user_id, {})
+    patterns = await account_data.get_for_user(client, SAVED_PATTERNS_TYPE, user_id)
 
     if name not in patterns and len(patterns) >= MAX_SAVED_PATTERNS_PER_USER:
         return False
@@ -85,16 +82,22 @@ async def save_pattern(client: AsyncClient, user_id: str, name: str, expr: str) 
     if new_patterns == patterns:
         return True  # already saved with this exact expression — nothing to write
 
-    users[user_id] = new_patterns
-    await _update_patterns(client, all_data)
+    await account_data.put_for_user(client, SAVED_PATTERNS_TYPE, user_id, new_patterns)
     return True
 
 
-async def _update_patterns(client: AsyncClient, all_data: Dict[str, Any]) -> None:
+async def forget_pattern(client: AsyncClient, user_id: str, name: str) -> bool:
     """
-    Persist `all_data` as the new saved-patterns blob.
+    Remove `user_id`'s saved pattern `name`.
 
-    Call only once the caller has confirmed there's an actual change to
-    write — this always performs the write, unconditionally.
+    Returns False (without writing anything) if `user_id` has no pattern by
+    that name. Same concurrent-writer caveat as `save_pattern`.
     """
-    await account_data.put_blob(client, SAVED_PATTERNS_TYPE, all_data)
+    patterns = await account_data.get_for_user(client, SAVED_PATTERNS_TYPE, user_id)
+
+    if name not in patterns:
+        return False
+
+    new_patterns = {n: e for n, e in patterns.items() if n != name}
+    await account_data.put_for_user(client, SAVED_PATTERNS_TYPE, user_id, new_patterns)
+    return True

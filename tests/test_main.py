@@ -15,12 +15,15 @@ os.environ.setdefault("MATRIX_STORE_PATH", "/tmp/matrix-bot-roll-test-store")
 from matrix_bot_roll.constants import MAX_SAVED_PATTERNS_PER_USER  # noqa: E402
 from matrix_bot_roll.main import message_callback  # noqa: E402
 from matrix_bot_roll.messages import (  # noqa: E402
+    FORGET_USAGE,
     NO_PREVIOUS_ROLL,
     ROLL_HELP,
     SAVE_USAGE,
     USAGE,
     invalid_expr,
     invalid_pattern_name,
+    pattern_forgotten,
+    pattern_not_found,
     pattern_save_limit_reached,
     pattern_saved,
     saved_patterns_list,
@@ -335,6 +338,62 @@ class TestSave:
         )
         assert "`boom`" not in output
         assert "'boom'" in output
+
+
+class TestForget:
+    def test_bare_forget_returns_usage(self):
+        assert _send_body("!room:example.org", "!forget") == FORGET_USAGE
+
+    def test_invalid_name_returns_error(self):
+        output = _send_body("!room:example.org", "!forget 1attack")
+        assert output == invalid_pattern_name("1attack")
+
+    def test_unknown_name_returns_not_found(self):
+        output = _send_body(
+            "!room:example.org", "!forget attack", sender="@alice:example.invalid"
+        )
+        assert output == pattern_not_found("attack")
+
+    def test_valid_forget_confirms_and_removes_it(self):
+        initial_blob = {"users": {"@alice:example.invalid": {"attack": "3d8+4"}}}
+        client, store = _fake_matrix_client(initial_blob=initial_blob)
+        output = _send_body(
+            "!room:example.org",
+            "!forget attack",
+            sender="@alice:example.invalid",
+            client=client,
+        )
+        assert output == pattern_forgotten("attack")
+        assert store["data"]["users"]["@alice:example.invalid"] == {}
+
+    def test_f_alias_forgets(self):
+        initial_blob = {"users": {"@alice:example.invalid": {"attack": "3d8+4"}}}
+        client, _ = _fake_matrix_client(initial_blob=initial_blob)
+        output = _send_body(
+            "!room:example.org",
+            "!f attack",
+            sender="@alice:example.invalid",
+            client=client,
+        )
+        assert output == pattern_forgotten("attack")
+
+    def test_different_senders_do_not_share_patterns(self):
+        initial_blob = {
+            "users": {
+                "@alice:example.invalid": {"attack": "3d8+4"},
+                "@bob:example.invalid": {"attack": "1d20+7"},
+            }
+        }
+        client, store = _fake_matrix_client(initial_blob=initial_blob)
+        output = _send_body(
+            "!room:example.org",
+            "!forget attack",
+            sender="@bob:example.invalid",
+            client=client,
+        )
+        assert output == pattern_forgotten("attack")
+        assert store["data"]["users"]["@alice:example.invalid"] == {"attack": "3d8+4"}
+        assert store["data"]["users"]["@bob:example.invalid"] == {}
 
 
 class TestRollSavedPattern:

@@ -22,7 +22,43 @@ from urllib.parse import quote
 from nio import AsyncClient
 
 
-async def get_blob(client: AsyncClient, account_data_type: str) -> Dict[str, Any]:
+async def get_for_user(
+    client: AsyncClient, account_data_type: str, user_id: str
+) -> Dict[str, Any]:
+    """
+    Fetch just `user_id`'s namespaced sub-dict from the blob stored under
+    `account_data_type`, or {} if nothing's been saved for them yet.
+
+    For the read-only "look up this user's data" case — see the module
+    docstring for why per-user data lives namespaced inside one shared blob
+    rather than separate per-user account data. A read-modify-write (like a
+    save or delete) should use `put_for_user` instead, which takes care of
+    writing back the rest of the blob untouched.
+    """
+    all_data = await _get_blob(client, account_data_type)
+    return all_data.get("users", {}).get(user_id, {})
+
+
+async def put_for_user(
+    client: AsyncClient, account_data_type: str, user_id: str, data: Dict[str, Any]
+) -> None:
+    """
+    Overwrite `user_id`'s namespaced sub-dict in the blob stored under
+    `account_data_type` with `data`, leaving every other user's data
+    untouched.
+
+    Read-modify-write against the whole blob: not safe against concurrent
+    writers (two bot instances, or two writes racing in-process) — there's
+    no compare-and-swap on the account-data endpoint, so the last write wins
+    and can clobber a concurrent change.
+    """
+    all_data = await _get_blob(client, account_data_type)
+    users = all_data.setdefault("users", {})
+    users[user_id] = data
+    await _put_blob(client, account_data_type, all_data)
+
+
+async def _get_blob(client: AsyncClient, account_data_type: str) -> Dict[str, Any]:
     """Fetch the whole blob stored under `account_data_type`, or {} if nothing's been saved yet."""
     response = await client.send(
         "GET", _path(client, account_data_type), headers=_auth_headers(client)
@@ -33,7 +69,7 @@ async def get_blob(client: AsyncClient, account_data_type: str) -> Dict[str, Any
     return await response.json()
 
 
-async def put_blob(
+async def _put_blob(
     client: AsyncClient, account_data_type: str, data: Dict[str, Any]
 ) -> None:
     """Overwrite the whole blob stored under `account_data_type` with `data`."""

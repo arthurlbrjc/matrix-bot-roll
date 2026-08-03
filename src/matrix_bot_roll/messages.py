@@ -12,12 +12,11 @@ USAGE = "\n".join(
     [
         "• `!roll (<expression> [expression ...] | <saved name>) [target] [-v] "
         "[| message]` (or `!r`) — roll dice",
-        "• `!roll --help` — detailed roll syntax and examples",
-        "• `!save <name> <expression> [target] [-v] [| message]` (or `!s`) "
-        "— save a roll pattern to reuse with `!roll <name>`",
-        "• `!save --list` — list your saved patterns",
         "• `!reroll [target] [-v] [| message]` (or `!rr`) — repeat the last roll "
         "(always terse unless `-v` is given here)",
+        "• `!save <name> <expression> [target] [-v] [| message]` (or `!s`) "
+        "— save a roll pattern to reuse with `!roll <name>`",
+        "• `!forget <name>` (or `!f`) — remove a saved pattern",
         "• `!detail` (or `!d`) — show the full breakdown of the last roll in this room",
     ]
 )
@@ -55,6 +54,8 @@ SAVE_USAGE = (
 NO_SAVED_PATTERNS = (
     "You have no saved patterns yet — use `!save <name> <expression>` to save one."
 )
+
+FORGET_USAGE = "Usage: `!forget <name>` (or `!f`) — e.g. `!forget attack`."
 
 
 def invalid_expr(expr: str, detail: str) -> str:
@@ -96,6 +97,16 @@ def pattern_save_limit_reached(name: str) -> str:
         f"Can't save `{name}` — you already have the maximum of "
         f"{MAX_SAVED_PATTERNS_PER_USER} saved patterns."
     )
+
+
+def pattern_forgotten(name: str) -> str:
+    """Build a confirmation reply for a successful `!forget`."""
+    return f"🗑️ Forgot `{name}`."
+
+
+def pattern_not_found(name: str) -> str:
+    """Build an error reply for a `!forget` naming a pattern the caller hasn't saved."""
+    return f"You have no saved pattern named `{name}`."
 
 
 def saved_patterns_list(patterns: Dict[str, str]) -> str:

@@ -4,15 +4,18 @@ import pytest
 
 from matrix_bot_roll import commands
 from matrix_bot_roll.commands import (
+    ForgetCommand,
     ListSavedCommand,
     ParsedRoll,
     RollCommand,
     SaveCommand,
     build_dice_command,
+    build_forget_command,
     build_save_command,
     build_saved_pattern_command,
 )
 from matrix_bot_roll.messages import (
+    FORGET_USAGE,
     INVALID_ROLL,
     NO_PREVIOUS_ROLL,
     ROLL_HELP,
@@ -598,3 +601,32 @@ class TestBuildSavedPatternCommand:
         assert isinstance(parsed, ParsedRoll)
         assert [expr for expr, _ in parsed.command.specs] == ["3d8+4"]
         assert parsed.command.target == Target(operator=">", value=15)
+
+
+class TestBuildForgetCommand:
+    def test_bare_forget_returns_usage(self):
+        assert build_forget_command("!forget") == FORGET_USAGE
+
+    def test_valid_forget_returns_forget_command(self):
+        result = build_forget_command("!forget attack")
+        assert result == ForgetCommand(name="attack")
+
+    def test_name_is_lowercased(self):
+        result = build_forget_command("!forget Attack")
+        assert isinstance(result, ForgetCommand)
+        assert result.name == "attack"
+
+    def test_invalid_name_returns_error(self):
+        assert build_forget_command("!forget 1attack") == invalid_pattern_name(
+            "1attack"
+        )
+
+    def test_extra_whitespace_around_name_is_stripped(self):
+        result = build_forget_command("!forget   attack  ")
+        assert result == ForgetCommand(name="attack")
+
+    def test_trailing_extra_tokens_are_rejected_as_invalid_name(self):
+        """Unlike `!save`, `!forget` takes just a name — any extra tokens
+        become part of `name` and fail its character validation."""
+        result = build_forget_command("!forget attack now")
+        assert result == invalid_pattern_name("attack now")
