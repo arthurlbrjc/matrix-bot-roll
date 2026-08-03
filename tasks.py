@@ -10,7 +10,10 @@ Examples:
 """
 
 import os
+import re
+import shlex
 import shutil
+from datetime import date
 
 from invoke import task
 
@@ -141,25 +144,103 @@ def clean(c):
 
 @task(
     help={
-        "release": "Target release, must be a valid semver string or a valid bump rule. Default to patch"
+        "release": "Target release, must be a valid semver string or a valid bump rule. Default to patch",
+        "changelog": "Draft a CHANGELOG.md entry for this release via the local `claude` CLI, "
+        "and pause for review before committing. Default: off",
     }
 )
-def version(ctx, release="patch"):
+def version(ctx, release="patch", changelog=False):
     """
     Bump package version and create commit with corresponding tag
     """
-    bumpversion(ctx, release)
-    new_version = ctx.run("poetry version -s", hide="out").stdout.strip()
-    with open("CHANGELOG.md") as changelog:
-        changelog_has_entry = f"[{new_version}]" in changelog.read()
+    new_version = ctx.run(
+        f"poetry version {release} --dry-run -s", hide="out"
+    ).stdout.strip()
+    with open("CHANGELOG.md") as file:
+        changelog_has_entry = f"[{new_version}]" in file.read()
     if not changelog_has_entry:
-        print(
-            f"Warning: CHANGELOG.md has no entry for {new_version} — "
-            f"`!changes` will be stale until one is added."
-        )
+        if changelog:
+            # Before pyproject.toml is touched: an aborted draft (Ctrl-C)
+            # then leaves nothing to undo.
+            draft_changelog_entry(ctx, new_version)
+        else:
+            print(
+                f"Warning: CHANGELOG.md has no entry for {new_version} — "
+                f"`!changes` will be stale until one is added."
+            )
+    bumpversion(ctx, release)
     ctx.run("git add --all")
     ctx.run(f"git commit --message='v{new_version}'")
     ctx.run(f"git tag --annotate 'v{new_version}' --message='v{new_version}'")
+
+
+def draft_changelog_entry(ctx, new_version):
+    """
+    Ask the local `claude` CLI to draft a Keep a Changelog entry for
+    `new_version` from the commit messages since the last tag, print the
+    draft, then either insert it into CHANGELOG.md on confirmation or pause
+    for the user to paste it in manually — the draft is never written
+    without an explicit yes.
+    """
+    last_tag = ctx.run(
+        "git describe --tags --abbrev=0", hide="out", warn=True
+    ).stdout.strip()
+    log_range = f"{last_tag}.." if last_tag else ""
+    commits = ctx.run(
+        f"git log --format='- %s' {log_range}HEAD", hide="out"
+    ).stdout.strip()
+    prompt = (
+        f"Draft a Keep a Changelog (https://keepachangelog.com) entry for "
+        f"matrix-bot-roll version {new_version}, dated {date.today().isoformat()}, "
+        f"based on these gitmoji-prefixed commit messages since the last release:\n\n"
+        f"{commits}\n\n"
+        f"Output only the section, in this exact shape (see CHANGELOG.md in the "
+        f"repo for the style and section headings already in use):\n\n"
+        f"## [{new_version}] - {date.today().isoformat()}\n\n### Added/Changed/Fixed\n\n- ...\n\n"
+        f"Skip pure refactor/docs/tooling commits unless they're user-facing. "
+        f"Keep bullets terse, matching the existing entries. "
+        f"Output nothing else — no preamble, no explanation of your reasoning, "
+        f"no text before or after the section."
+    )
+    raw_draft = ctx.run(
+        f"claude -p {shlex.quote(prompt)} < /dev/null", hide="out"
+    ).stdout.strip()
+    draft = extract_changelog_section(raw_draft)
+    print("\n--- Draft CHANGELOG.md entry ---\n")
+    print(draft)
+    print("\n--- end draft ---\n")
+
+    if input("Add this entry to CHANGELOG.md now? [y/N]: ").strip().lower() == "y":
+        insert_changelog_entry(draft)
+        print("Added to CHANGELOG.md.")
+    else:
+        input("Add it manually, then press Enter to continue (Ctrl-C to abort): ")
+
+
+def extract_changelog_section(raw_draft):
+    """
+    Strip any preamble/commentary `claude -p` wrote before the `## [` heading —
+    it's asked not to, but isn't always obedient. Falls back to the raw
+    output, untouched, if no heading is found at all.
+    """
+    match = re.search(r"^## \[", raw_draft, re.MULTILINE)
+    if not match:
+        return raw_draft
+    start = match.start()
+    return raw_draft[start:].strip()
+
+
+def insert_changelog_entry(draft):
+    """Insert `draft` into CHANGELOG.md just above the first existing `## [` release heading, or at the end of the file if there isn't one yet."""
+    with open("CHANGELOG.md") as file:
+        text = file.read()
+
+    match = re.search(r"^## \[", text, re.MULTILINE)
+    insertion_point = match.start() if match else len(text)
+    new_text = f"{text[:insertion_point]}{draft.strip()}\n\n{text[insertion_point:]}"
+
+    with open("CHANGELOG.md", "w") as file:
+        file.write(new_text)
 
 
 @task(
