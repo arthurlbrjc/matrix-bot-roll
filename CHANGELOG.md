@@ -6,6 +6,12 @@ described by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Entries below `v1.5.0` are documented retroactively from the commit history —
 not rewritten to look prettier than they were, just organized by section.
 
+## [1.5.1] - 2026-08-03
+
+### Added
+
+- `!changes` command to view the changelog
+
 ## [1.5.0] - 2026-08-03
 
 ### Added
